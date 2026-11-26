@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Akıllı Bakım CMMS",
+    "slug": "akilli-bakim-cmms",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.emr3ks.akillibakimcmms"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Makine QR kodlarını okumak için kamera erişimine izin verin."
+        }
+      ],
+      "expo-status-bar",
+      "expo-sharing"
+    ]
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "name": "akilli-bakim-cmms",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Endüstriyel tesisler için mobil öncelikli Akıllı Bakım ve Arıza Takip (CMMS) uygulaması.",
+  "type": "module",
+  "main": "expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "web": "expo start --web",
+    "server": "node server/src/server.js",
+    "demo": "node server/scripts/demo.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "build": "expo export --platform web --output-dir dist",
+    "capture:ui": "node scripts/capture-ui.mjs",
+    "check": "npm run lint && npm test && npm run build"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~58.0.17",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "babel-preset-expo": "~58.0.0",
+    "cors": "^2.8.6",
+    "expo": "~58.0.26",
+    "expo-camera": "~58.0.14",
+    "expo-linear-gradient": "~58.0.4",
+    "expo-print": "~58.0.9",
+    "expo-sharing": "~58.0.23",
+    "expo-status-bar": "~58.0.5",
+    "express": "^5.3.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-qrcode-svg": "^6.3.55",
+    "react-native-safe-area-context": "~5.11.1",
+    "react-native-svg": "15.16.0",
+    "react-native-web": "^0.21.4",
+    "sqlite3": "^6.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.10",
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
+    "@types/supertest": "^7.2.1",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "^58.0.4",
+    "playwright-core": "^1.65.1",
+    "supertest": "^7.3.2",
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.2"
+  }
+}
