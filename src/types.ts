@@ -60,6 +60,9 @@ export interface DashboardSummary {
   stopped: number;
   openFaults: number;
   activeWorkOrders: number;
+  duePreventive: number;
+  upcomingPreventive: number;
+  overduePreventive: number;
 }
 
 export interface MachineRecord {
@@ -195,6 +198,112 @@ export interface WorkOrderCompletionInput {
   durationMinutes: number;
   solutionPhotoBase64?: string | null;
   solutionPhotoMimeType?: string | null;
+}
+
+export type PreventiveFrequency =
+  | 'weekly'
+  | 'monthly'
+  | 'quarterly'
+  | 'semiannual'
+  | 'annual'
+  | 'working_hours';
+
+export type PreventiveDueState = 'overdue' | 'due' | 'upcoming' | 'scheduled';
+
+export interface PreventiveChecklistItem {
+  id: number;
+  position: number;
+  title: string;
+  measurementLabel: string | null;
+}
+
+export interface PreventiveChecklistDefinition {
+  title: string;
+  measurementLabel?: string | null;
+}
+
+export interface PreventivePlan {
+  id: number;
+  code: string;
+  machineId: number;
+  machine: {
+    id: number;
+    code: string;
+    name: string;
+    line: string;
+    status: MachineStatus;
+  };
+  name: string;
+  frequency: PreventiveFrequency;
+  assignedToId: number | null;
+  assignedTo: {
+    id: number;
+    name: string;
+    initials: string;
+  } | null;
+  nextDueDate: string;
+  nextDueRuntimeHours: number | null;
+  intervalHours: number | null;
+  checklistItems: PreventiveChecklistItem[];
+  dueState: PreventiveDueState;
+  lastCompletedAt: string | null;
+  createdBy: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PreventivePlanInput {
+  machineId: number;
+  name: string;
+  frequency: PreventiveFrequency;
+  assignedTo: number;
+  nextDueDate: string;
+  checklist: PreventiveChecklistDefinition[];
+  intervalHours?: number;
+  runtimeHours?: number;
+}
+
+export interface PreventiveChecklistResultInput {
+  itemId: number;
+  completed: boolean;
+  measurementValue?: string | number | null;
+  note?: string | null;
+}
+
+export interface PreventiveCompletionInput {
+  checklistResults: PreventiveChecklistResultInput[];
+  notes?: string | null;
+  runtimeHours?: number;
+}
+
+export interface PreventiveChecklistResult {
+  itemId: number;
+  title: string;
+  completed: boolean;
+  measurementValue: number | null;
+  note: string | null;
+}
+
+export interface PreventiveCompletion {
+  id: number;
+  planId: number;
+  code: string;
+  completedBy: number;
+  completedByUser: {
+    id: number;
+    name: string;
+    initials: string;
+  };
+  completedAt: string;
+  notes: string | null;
+  nextDueDate: string;
+  nextDueRuntimeHours: number | null;
+  results: PreventiveChecklistResult[];
+}
+
+export interface PreventivePlanFilters {
+  machineId?: number | '';
+  assignedTo?: number | '';
 }
 
 export interface ApiErrorShape {

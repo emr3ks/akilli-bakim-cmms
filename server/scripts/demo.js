@@ -10,7 +10,8 @@ export async function runDemo(databasePath = process.env.CMMS_DB_PATH || DEFAULT
     const result = await seedDemoData(database);
     console.log(
       `Demo data reset: ${result.users} users, ${result.machines} machines, `
-      + `${result.faults} faults and ${result.workOrders} work orders seeded in ${databasePath}`,
+      + `${result.faults} faults, ${result.workOrders} work orders, `
+      + `${result.preventivePlans} preventive plans and ${result.checklistItems} checklist items seeded in ${databasePath}`,
     );
     return result;
   } finally {

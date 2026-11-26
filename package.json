@@ -2,7 +2,7 @@
   "name": "akilli-bakim-cmms",
   "version": "1.0.0",
   "private": true,
-  "description": "Endüstriyel tesisler için mobil öncelikli Akıllı Bakım ve Arıza Takip (CMMS) uygulaması.",
+  "description": "Endüstriyel tesisler için mobil öncelikli Meknivo Bakım ve Arıza Takip (CMMS) uygulaması.",
   "type": "module",
   "main": "expo/AppEntry.js",
   "scripts": {
@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "build": "expo export --platform web --output-dir dist",
     "capture:ui": "npm run demo && node scripts/capture-ui.mjs",
+    "brand:generate": "node scripts/generate-brand-assets.mjs",
     "check": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "engines": {

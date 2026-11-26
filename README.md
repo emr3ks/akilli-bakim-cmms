@@ -1,8 +1,8 @@
-# Akıllı Bakım CMMS
+# Meknivo CMMS
 
-Endüstriyel tesisler için makine envanteri, QR kodla makine erişimi, bakım/arıza kayıtları ve rol bazlı çalışma akışları sunan mobil öncelikli CMMS uygulaması.
+Endüstriyel tesisler için makine envanteri, QR kodla makine erişimi, periyodik bakım planlama, bakım/arıza kayıtları ve rol bazlı çalışma akışları sunan mobil öncelikli CMMS uygulaması.
 
-Faz 1 ve Faz 2 kapsamında Expo tabanlı iOS/Android/Web arayüzü, Express REST API, kalıcı SQLite veritabanı ve otomatik backend testleri bulunur.
+Faz 1–3 kapsamında Expo tabanlı iOS/Android/Web arayüzü, Express REST API, kalıcı SQLite veritabanı ve otomatik backend testleri bulunur.
 
 ## Özellikler
 
@@ -18,7 +18,13 @@ Faz 1 ve Faz 2 kapsamında Expo tabanlı iOS/Android/Web arayüzü, Express REST
 - **Rol kapsamlı yönetim:** Yönetici tüm kayıtları görür, teknisyen yalnızca kendi iş emirlerini, operatör yalnızca kendi arıza bildirimlerini görür.
 - **Arıza ve iş emri filtreleme:** Açık durum, aciliyet ve atanan teknisyene göre anlık filtreleme.
 - **Faz 2 dashboard sayaçları:** Açık arıza ve aktif iş emri sayıları ana özet panelinde gösterilir.
-- **Demo verileri:** Gerçekçi endüstriyel makineler, 3 farklı rolde kullanıcı ve farklı aşamalarda en az 4 arıza/iş emri kaydı.
+- **Periyodik bakım planları:** Makine bazlı `PB-YYYY-NNN` planları; haftalık, aylık, 3 aylık, 6 aylık, yıllık ve çalışma saati bazlı periyotları destekler.
+- **Bakım takvimi:** Geciken, bugünkü, yaklaşan ve ileri tarihli planları metin ve renk etiketleriyle ayırır.
+- **Kontrol listesi icrası:** Teknisyen her kontrol maddesini işaretler, ölçüm/not girer; tüm maddeler tamamlandığında sonraki bakım tarihi otomatik hesaplanır.
+- **Bakım geçmişi:** Tamamlanan kontrol sonuçları, ölçümler, notlar ve yeni tarih plan bazında kayıt altına alınır.
+- **Faz 3 dashboard sayaçları:** Yaklaşan, bugünkü ve geciken periyodik bakım sayıları ana özet panelinde gösterilir.
+- **Meknivo marka kimliği:** Resmi SVG varlıkları giriş, üst navigasyon, yükleme ekranı, makine kartı ve yazdırılabilir QR kimlik kartında kullanılır.
+- **Demo verileri:** Gerçekçi endüstriyel makineler, 3 farklı rolde kullanıcı, farklı aşamalarda arıza/iş emri ve altı periyodik bakım planı.
 
 ## Teknoloji
 
@@ -90,8 +96,8 @@ Giriş ekranındaki **Hızlı Demo Giriş** düğmeleri ilgili rolle doğrudan o
 
 | Rol | Kullanıcı | Yetki özeti |
 | --- | --- | --- |
-| Bakım Yöneticisi | Adın Yönetici | Makine CRUD, QR, bakım/arıza, dashboard |
-| Bakım Teknisyeni | Deniz Teknisyen | Makine görüntüleme, QR okutma, bakım/arıza kaydı |
+| Bakım Yöneticisi | Adın Yönetici | Makine CRUD, QR, periyodik plan oluşturma, bakım/arıza, dashboard |
+| Bakım Teknisyeni | Deniz Teknisyen | Makine görüntüleme, QR okutma, atanan periyodik planları ve bakım/arıza kaydı |
 | Operatör | Elif Operatör | Makine görüntüleme, QR okutma, hızlı arıza bildirimi |
 
 ## Komutlar
@@ -107,6 +113,7 @@ Giriş ekranındaki **Hızlı Demo Giriş** düğmeleri ilgili rolle doğrudan o
 | `npm run typecheck` | Strict TypeScript kontrolünü hatasız çalıştırır |
 | `npm run build` | Expo Web üretim çıktısını `dist/` klasörüne üretir |
 | `npm run capture:ui` | API ve Expo sunucuları çalışırken gerçek tarayıcı akışlarını doğrular ve ekran görüntülerini kaydeder |
+| `npm run brand:generate` | Resmi `assets/brand/` SVG dosyalarından uygulama içi marka kaynağını yeniler |
 | `npm run check` | Lint, typecheck, test ve üretim derlemesini birlikte çalıştırır |
 
 ## API özeti
@@ -118,7 +125,12 @@ Tüm makine yazma işlemleri `x-user-id` başlığındaki kullanıcı kimliği i
 | `GET` | `/api/health` | Herkese açık |
 | `GET` | `/api/auth/demo-users` | Herkese açık |
 | `POST` | `/api/auth/login` | Herkese açık |
-| `GET` | `/api/dashboard/summary` | Oturum açmış kullanıcı; açık arıza ve aktif iş emri sayaçlarını destekler |
+| `GET` | `/api/dashboard/summary` | Oturum açmış kullanıcı; açık arıza, aktif iş emri ve periyodik bakım sayaçlarını destekler |
+| `GET` | `/api/preventive-plans` | Yönetici tüm planları, teknisyen yalnızca kendi atamalarını görür; `machineId` ve `assignedTo` filtrelerini destekler |
+| `GET` | `/api/preventive-plans/:id` | Yönetici veya planın atanmış teknisyeni |
+| `POST` | `/api/preventive-plans` | Yönetici; makine, periyot, teknisyen ve kontrol listesiyle `PB-YYYY-NNN` planı oluşturur |
+| `POST` | `/api/preventive-plans/:id/complete` | Atanmış teknisyen/yönetici; kontrol sonuçlarını kaydeder ve sonraki bakım tarihini ilerletir |
+| `GET` | `/api/preventive-plans/:id/completions` | Yönetici veya planın atanmış teknisyeni; tamamlanan bakım geçmişi |
 | `GET` | `/api/faults` | Rol kapsamlı: yönetici tümü, teknisyen ilgili kayıtlar, operatör kendi bildirimleri; `status`, `urgency`, `assignedTo` ve `machineId` filtrelerini destekler |
 | `GET` | `/api/faults/:id` | Görüntülenebilen arıza kaydı |
 | `POST` | `/api/faults` | Tüm roller; fotoğraflı arıza bildirimi oluşturur |
@@ -147,9 +159,17 @@ Varsayılan SQLite dosyası `server/data/cmms.sqlite` konumundadır. Alternatif 
 
 ## Görsel doğrulama
 
-Gerçek Expo Web uygulaması Edge üzerinde `390×844` mobil ve `1440×900` masaüstü görünümlerinde çalıştırılarak doğrulandı. Faz 2 için aynı senaryoların `b5a4db7` öncesi ve değişiklik sonrası karşılaştırmaları, yeni ekranların çıktıları `docs/screenshots/` klasöründe kayıtlıdır:
+Gerçek Expo Web uygulaması Edge üzerinde `390×844` mobil ve `1440×900` masaüstü görünümlerinde çalıştırılarak doğrulandı. Faz 3 için `6d95ac6` öncesi ve değişiklik sonrası karşılaştırmaları, yeni ekranların çıktıları `docs/screenshots/` klasöründe kayıtlıdır:
 
 - [Öncesi mobil dashboard](docs/screenshots/before-mobile-dashboard.png) / [Sonrası mobil dashboard](docs/screenshots/after-mobile-dashboard.png)
+- [Öncesi Faz 3 mobil giriş](docs/screenshots/before-phase3-mobile-login.png) / [Sonrası Faz 3 mobil giriş](docs/screenshots/after-phase3-mobile-login.png)
+- [Öncesi Faz 3 mobil dashboard](docs/screenshots/before-phase3-mobile-dashboard.png) / [Sonrası Faz 3 mobil dashboard](docs/screenshots/after-phase3-mobile-dashboard.png)
+- [Öncesi Faz 3 masaüstü dashboard](docs/screenshots/before-phase3-desktop-dashboard.png) / [Sonrası Faz 3 masaüstü dashboard](docs/screenshots/after-phase3-desktop-dashboard.png)
+- [Öncesi Faz 3 mobil makine kartı](docs/screenshots/before-phase3-mobile-machine-detail.png) / [Sonrası Faz 3 mobil makine kartı](docs/screenshots/after-phase3-mobile-machine-detail.png)
+- [Faz 3 mobil periyodik bakım planları](docs/screenshots/after-phase3-mobile-preventive-plans.png)
+- [Faz 3 mobil yeni plan formu](docs/screenshots/after-phase3-mobile-preventive-create.png)
+- [Faz 3 mobil kontrol listesi icrası](docs/screenshots/after-phase3-mobile-preventive-checklist.png)
+- [Faz 3 masaüstü periyodik bakım planları](docs/screenshots/after-phase3-desktop-preventive-plans.png)
 - [Öncesi mobil makine kartı](docs/screenshots/before-mobile-machine-detail.png) / [Sonrası mobil makine kartı](docs/screenshots/after-mobile-machine-detail.png)
 - [Öncesi masaüstü dashboard](docs/screenshots/before-desktop-dashboard.png) / [Sonrası masaüstü dashboard](docs/screenshots/after-desktop-dashboard.png)
 - [Mobil iş emri yönetim ekranı](docs/screenshots/after-mobile-work-orders.png)
@@ -162,7 +182,7 @@ Gerçek Expo Web uygulaması Edge üzerinde `390×844` mobil ve `1440×900` masa
 - [Mobil envanter](docs/screenshots/after-mobile-inventory.png)
 - [Mobil QR okutma](docs/screenshots/after-mobile-scanner.png)
 
-`npm run capture:ui` komutu bu akışları yeniden çalıştırır; API ve Expo sunucularının çalışıyor olması gerekir. Betik, gerçek bir PNG dosyası seçip arıza bildirimini gönderir; teknisyen iş emrini müdahale/parça/çözüldü/kapatıldı durumları boyunca ilerletir ve yatay taşma ile tarayıcı hatalarını denetler.
+`npm run capture:ui` komutu bu akışları yeniden çalıştırır; API ve Expo sunucularının çalışıyor olması gerekir. Betik, gerçek bir PNG dosyası seçip arıza bildirimini gönderir; teknisyen iş emrini müdahale/parça/çözüldü/kapatıldı durumları boyunca ilerletir; yeni periyodik plan formunu ve kontrol listesi icra ekranını doğrular; yatay taşma ile tarayıcı hatalarını denetler.
 
 ## Proje yapısı
 

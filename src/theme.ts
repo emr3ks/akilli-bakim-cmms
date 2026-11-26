@@ -1,13 +1,13 @@
 import { Platform } from 'react-native';
 
 export const colors = {
-  ink: '#10233F',
+  ink: '#081735',
   inkMuted: '#53647A',
-  primary: '#1264E3',
-  primaryDark: '#0A3F96',
-  primarySoft: '#EAF2FF',
-  accent: '#16A394',
-  accentSoft: '#E5F8F4',
+  primary: '#087FE5',
+  primaryDark: '#0646A8',
+  primarySoft: '#EAF4FC',
+  accent: '#20B9F4',
+  accentSoft: '#E4F8FE',
   background: '#F3F6FA',
   surface: '#FFFFFF',
   surfaceAlt: '#F8FAFD',

@@ -74,6 +74,62 @@ CREATE TABLE IF NOT EXISTS work_orders (
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
 );
 
+CREATE TABLE IF NOT EXISTS maintenance_plans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  machine_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  frequency TEXT NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'quarterly', 'semiannual', 'annual', 'working_hours')),
+  assigned_to INTEGER,
+  next_due_date TEXT NOT NULL,
+  next_due_runtime_hours REAL,
+  interval_hours REAL,
+  last_completed_at TEXT,
+  created_by INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+  FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS maintenance_checklist_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  plan_id INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  measurement_label TEXT,
+  FOREIGN KEY (plan_id) REFERENCES maintenance_plans(id) ON DELETE CASCADE,
+  UNIQUE (plan_id, position)
+);
+
+CREATE TABLE IF NOT EXISTS maintenance_executions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  plan_id INTEGER NOT NULL,
+  completed_by INTEGER NOT NULL,
+  completed_at TEXT NOT NULL,
+  notes TEXT,
+  runtime_hours REAL,
+  next_due_date TEXT NOT NULL,
+  next_due_runtime_hours REAL,
+  FOREIGN KEY (plan_id) REFERENCES maintenance_plans(id) ON DELETE CASCADE,
+  FOREIGN KEY (completed_by) REFERENCES users(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS maintenance_execution_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  execution_id INTEGER NOT NULL,
+  checklist_item_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  completed INTEGER NOT NULL CHECK (completed = 1),
+  measurement_value REAL,
+  note TEXT,
+  FOREIGN KEY (execution_id) REFERENCES maintenance_executions(id) ON DELETE CASCADE,
+  FOREIGN KEY (checklist_item_id) REFERENCES maintenance_checklist_items(id) ON DELETE RESTRICT,
+  UNIQUE (execution_id, checklist_item_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_machines_line ON machines(line);
 CREATE INDEX IF NOT EXISTS idx_machines_status ON machines(status);
 CREATE INDEX IF NOT EXISTS idx_machines_criticality ON machines(criticality);
@@ -85,4 +141,11 @@ CREATE INDEX IF NOT EXISTS idx_faults_status ON faults(status);
 CREATE INDEX IF NOT EXISTS idx_faults_urgency ON faults(urgency);
 CREATE INDEX IF NOT EXISTS idx_work_orders_status ON work_orders(status);
 CREATE INDEX IF NOT EXISTS idx_work_orders_assigned_to ON work_orders(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_maintenance_plans_machine ON maintenance_plans(machine_id);
+CREATE INDEX IF NOT EXISTS idx_maintenance_plans_assigned_to ON maintenance_plans(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_maintenance_plans_due_date ON maintenance_plans(next_due_date);
+CREATE INDEX IF NOT EXISTS idx_maintenance_checklist_plan ON maintenance_checklist_items(plan_id);
+CREATE INDEX IF NOT EXISTS idx_maintenance_executions_plan ON maintenance_executions(plan_id);
+CREATE INDEX IF NOT EXISTS idx_maintenance_executions_completed_at ON maintenance_executions(completed_at);
+CREATE INDEX IF NOT EXISTS idx_maintenance_execution_items_execution ON maintenance_execution_items(execution_id);
 `;

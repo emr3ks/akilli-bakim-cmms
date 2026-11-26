@@ -6,6 +6,7 @@ import { asyncHandler, forbidden, notFound, validationError } from './errors.js'
 import { authenticate, requireRole } from './middleware/auth.js';
 import { getStatusCounts, findMachineByCode, listMachines } from './repositories/machines.js';
 import { findUserById, listUsers } from './repositories/users.js';
+import { getPreventiveDueCounts } from './repositories/preventive-plans.js';
 import {
   createMachine,
   deleteMachineById,
@@ -29,8 +30,16 @@ import {
   updateWorkOrderStatus,
 } from './services/work-order-service.js';
 import {
+  completePreventivePlan,
+  createPreventivePlan,
+  getPreventivePlanOrThrow,
+  listManagedPreventivePlans,
+  listPreventiveCompletions,
+} from './services/preventive-plan-service.js';
+import {
   validateFaultFilters,
   validateMachineFilters,
+  validatePreventivePlanFilters,
   validateRecordPayload,
   validateWorkOrderFilters,
 } from './validators.js';
@@ -117,7 +126,9 @@ export function createApp(options = {}) {
   api.use(authenticate);
 
   api.get('/dashboard/summary', asyncHandler(async (request, response) => {
-    response.json(await getStatusCounts(request.db));
+    const counts = await getStatusCounts(request.db);
+    Object.assign(counts, await getPreventiveDueCounts(request.db));
+    response.json(counts);
   }));
 
   api.get('/faults', asyncHandler(async (request, response) => {
@@ -194,6 +205,44 @@ export function createApp(options = {}) {
         request.user,
       );
       response.json({ workOrder });
+    }),
+  );
+
+  api.get('/preventive-plans', asyncHandler(async (request, response) => {
+    const filters = validatePreventivePlanFilters(request.query);
+    const plans = await listManagedPreventivePlans(request.db, filters, request.user);
+    response.json({ plans });
+  }));
+
+  api.get('/preventive-plans/:id', asyncHandler(async (request, response) => {
+    const planId = parsePositiveId(request.params.id, 'Preventive plan id');
+    const plan = await getPreventivePlanOrThrow(request.db, planId, request.user);
+    response.json({ plan });
+  }));
+
+  api.post('/preventive-plans', requireRole('admin'), asyncHandler(async (request, response) => {
+    const plan = await createPreventivePlan(request.db, request.body, request.user);
+    response.status(201).json({ plan });
+  }));
+
+  api.get('/preventive-plans/:id/completions', asyncHandler(async (request, response) => {
+    const planId = parsePositiveId(request.params.id, 'Preventive plan id');
+    const completions = await listPreventiveCompletions(request.db, planId, request.user);
+    response.json({ completions });
+  }));
+
+  api.post(
+    '/preventive-plans/:id/complete',
+    requireRole('admin', 'technician'),
+    asyncHandler(async (request, response) => {
+      const planId = parsePositiveId(request.params.id, 'Preventive plan id');
+      const result = await completePreventivePlan(
+        request.db,
+        planId,
+        request.body,
+        request.user,
+      );
+      response.json(result);
     }),
   );
 

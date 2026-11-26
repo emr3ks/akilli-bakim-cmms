@@ -12,6 +12,7 @@ import {
 import QRCode from 'react-native-qrcode-svg';
 
 import { api } from '../api';
+import { MeknivoLogo } from '../brand/MeknivoLogo';
 import { FaultReportModal } from '../components/FaultReportModal';
 import { exportMachineCardPdf, printMachineCard } from '../printing';
 import { colors, radius, spacing, typography } from '../theme';
@@ -191,7 +192,9 @@ export function MachineDetailScreen({ machine, user, onClose, onChanged, onDelet
               <CriticalityBadge criticality={current.criticality} />
             </View>
           </View>
-          <View style={styles.heroMark}><Text style={styles.heroMarkText}>CM</Text></View>
+          <View style={styles.heroMark} accessible accessibilityLabel="Meknivo">
+            <MeknivoLogo variant="primary-dark" width={92} height={21} />
+          </View>
         </View>
 
         <View style={styles.twoColumnLayout}>
@@ -375,8 +378,7 @@ const styles = StyleSheet.create({
   machineName: { ...typography.heading, color: colors.white },
   machineLine: { ...typography.body, color: '#C7D6E8' },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  heroMark: { width: 70, height: 70, borderRadius: 22, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  heroMarkText: { color: colors.white, fontSize: 24, fontWeight: '900' },
+  heroMark: { width: 92, height: 58, borderRadius: 18, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   twoColumnLayout: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: spacing.lg },
   mainColumn: { flexGrow: 1, flexBasis: '58%', minWidth: 300, gap: spacing.lg },
   sideColumn: { flexGrow: 1, flexBasis: '36%', minWidth: 280, gap: spacing.lg },

@@ -10,21 +10,24 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, radius, spacing, typography } from './src/theme';
+import { MeknivoLogo } from './src/brand/MeknivoLogo';
 import type { Machine, User } from './src/types';
 import { roleLabels } from './src/ui';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { InventoryScreen } from './src/screens/InventoryScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { MachineDetailScreen } from './src/screens/MachineDetailScreen';
+import { PreventiveScreen } from './src/screens/PreventiveScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { WorkOrdersScreen } from './src/screens/WorkOrdersScreen';
 
 const SESSION_KEY = 'cmms.session.v1';
-type Tab = 'dashboard' | 'inventory' | 'workorders' | 'scanner';
+type Tab = 'dashboard' | 'inventory' | 'preventive' | 'workorders' | 'scanner';
 
 const tabs: { key: Tab; label: string; icon: string }[] = [
   { key: 'dashboard', label: 'Özet', icon: '◫' },
   { key: 'inventory', label: 'Envanter', icon: '▦' },
+  { key: 'preventive', label: 'Bakım', icon: '↻' },
   { key: 'workorders', label: 'Arıza / İş', icon: '⚑' },
   { key: 'scanner', label: 'QR Okut', icon: '⌗' },
 ];
@@ -76,9 +79,11 @@ export default function App() {
   if (booting) {
     return (
       <SafeAreaProvider>
-        <View style={styles.bootScreen}>
-          <View style={styles.bootLogo}><Text style={styles.bootLogoText}>CM</Text></View>
-          <Text style={styles.bootTitle}>Akıllı Bakım CMMS</Text>
+        <View style={styles.bootScreen} accessible accessibilityLabel="Meknivo CMMS yükleniyor">
+          <View style={styles.bootLogo}>
+            <MeknivoLogo variant="app-icon" width={72} height={72} />
+          </View>
+          <Text style={styles.bootTitle}>Meknivo CMMS</Text>
           <Text style={styles.bootText}>Uygulama hazırlanıyor…</Text>
         </View>
       </SafeAreaProvider>
@@ -100,12 +105,9 @@ export default function App() {
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.appFrame}>
           <View style={styles.header}>
-            <View style={styles.brandRow}>
-              <View style={styles.brandMark}><Text style={styles.brandMarkText}>CM</Text></View>
-              <View>
-                <Text style={styles.brandName}>Akıllı Bakım</Text>
-                <Text style={styles.brandSubtitle}>CMMS · Faz 2</Text>
-              </View>
+            <View style={styles.brandRow} accessible accessibilityLabel="Meknivo CMMS">
+              <MeknivoLogo variant="symbol" width={38} height={21} />
+              <Text style={styles.brandName}>Meknivo CMMS</Text>
             </View>
             <View style={styles.profileRow}>
               <View style={styles.profileText}>
@@ -135,9 +137,12 @@ export default function App() {
                 onOpenInventory={() => setTab('inventory')}
                 onOpenScanner={() => setTab('scanner')}
                 onOpenWorkOrders={() => setTab('workorders')}
+                onOpenPreventive={() => setTab('preventive')}
               />
             ) : tab === 'inventory' ? (
               <InventoryScreen user={user} onOpenMachine={setSelectedMachine} />
+            ) : tab === 'preventive' ? (
+              <PreventiveScreen user={user} />
             ) : tab === 'workorders' ? (
               <WorkOrdersScreen user={user} />
             ) : (
@@ -148,7 +153,7 @@ export default function App() {
           {!selectedMachine ? (
             <View style={styles.bottomNav}>
               <View style={styles.navInner}>
-                {tabs.filter((item) => user.role !== 'operator' || item.key !== 'workorders').map((item) => {
+                {tabs.filter((item) => user.role !== 'operator' || !['workorders', 'preventive'].includes(item.key)).map((item) => {
                   const active = tab === item.key;
                   return (
                     <Pressable
@@ -178,8 +183,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   appFrame: { flex: 1, backgroundColor: colors.background },
   bootScreen: { flex: 1, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
-  bootLogo: { width: 64, height: 64, borderRadius: radius.lg, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  bootLogoText: { color: colors.white, fontSize: 23, fontWeight: '900' },
+  bootLogo: { width: 72, height: 72, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
   bootTitle: { ...typography.heading, color: colors.white, marginTop: spacing.sm },
   bootText: { ...typography.body, color: '#BFD0E4' },
   header: {
@@ -193,11 +197,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  brandMark: { width: 38, height: 38, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  brandMarkText: { color: colors.white, fontSize: 14, fontWeight: '900' },
-  brandName: { ...typography.label, color: colors.ink, fontSize: 15 },
-  brandSubtitle: { ...typography.caption, color: colors.inkMuted, fontSize: 10 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
+  brandName: { ...typography.label, color: colors.primaryDark, fontSize: 13, letterSpacing: 0.4 },
   profileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   profileText: { alignItems: 'flex-end' },
   profileName: { ...typography.label, color: colors.ink },
@@ -218,15 +219,15 @@ const styles = StyleSheet.create({
   navInner: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: spacing.sm,
+    gap: 2,
     width: '100%',
-    maxWidth: 560,
+    maxWidth: 680,
     alignSelf: 'center',
   },
-  navItem: { flex: 1, minHeight: 50, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: spacing.sm },
+  navItem: { flex: 1, minHeight: 54, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 2, paddingHorizontal: 2 },
   navItemActive: { backgroundColor: colors.primarySoft },
-  navIcon: { color: colors.inkMuted, fontSize: 20, fontWeight: '700' },
+  navIcon: { color: colors.inkMuted, fontSize: 18, fontWeight: '700' },
   navIconActive: { color: colors.primary },
-  navLabel: { ...typography.label, color: colors.inkMuted },
+  navLabel: { ...typography.caption, color: colors.inkMuted, fontSize: 10, textAlign: 'center' },
   navLabelActive: { color: colors.primaryDark },
 });

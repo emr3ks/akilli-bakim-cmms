@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api } from '../api';
+import { MeknivoLogo } from '../brand/MeknivoLogo';
 import { colors, radius, shadow, spacing, typography } from '../theme';
 import type { Role, User } from '../types';
 import { Button, ErrorState, LoadingState, roleLabels } from '../ui';
@@ -57,17 +58,17 @@ export function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
   };
 
   return (
-    <LinearGradient colors={['#0A1B33', '#123E75', '#1264E3']} style={styles.background}>
+    <LinearGradient colors={['#081735', '#0646A8', '#087FE5']} style={styles.background}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.hero}>
-            <View style={styles.logoBox}>
-              <Text style={styles.logoMark}>CM</Text>
+            <View style={styles.logoBox} accessible accessibilityLabel="Meknivo CMMS">
+              <MeknivoLogo variant="primary-horizontal" width={230} height={54} />
             </View>
             <Text style={styles.eyebrow}>ENDÜSTRİYEL BAKIM YÖNETİMİ</Text>
-            <Text style={styles.title}>Akıllı Bakım{`\n`}CMMS</Text>
+            <Text style={styles.title}>Meknivo CMMS</Text>
             <Text style={styles.subtitle}>
-              Makine envanterinizi, QR kimliklerini ve saha arıza akışınızı tek yerden yönetin.
+              Makine envanterinizi, periyodik bakım planlarını ve saha arıza akışınızı tek yerden yönetin.
             </Text>
           </View>
 
@@ -139,16 +140,16 @@ const styles = StyleSheet.create({
   },
   hero: { alignItems: 'center', gap: spacing.sm },
   logoBox: {
-    width: 66,
-    height: 66,
+    width: 262,
+    height: 82,
     borderRadius: radius.lg,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
+    overflow: 'hidden',
     ...shadow,
   },
-  logoMark: { color: colors.primaryDark, fontSize: 24, fontWeight: '900', letterSpacing: -1 },
   eyebrow: { ...typography.caption, color: '#BFD8FF', fontWeight: '800', letterSpacing: 1.5 },
   title: { ...typography.title, color: colors.white, textAlign: 'center', fontSize: 34, lineHeight: 39 },
   subtitle: { ...typography.body, color: '#D7E6FC', textAlign: 'center', maxWidth: 460 },

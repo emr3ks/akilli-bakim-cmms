@@ -1,6 +1,7 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
+import { BRAND_SVG } from './brand/generated-assets';
 import { createQrDataUri } from './qr';
 import { criticalityLabels, statusLabels } from './ui';
 import type { Machine } from './types';
@@ -37,17 +38,18 @@ export function buildMachineCardHtml(machine: Machine): string {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <style>
           * { box-sizing: border-box; }
-          body { margin: 0; padding: 32px; background: #eef2f7; color: #10233f; font-family: Arial, sans-serif; }
+          body { margin: 0; padding: 32px; background: #eef2f7; color: #081735; font-family: Arial, sans-serif; }
           .card { width: 760px; max-width: 100%; margin: 0 auto; background: white; border: 2px solid #dce4ee; border-radius: 22px; overflow: hidden; box-shadow: 0 12px 30px rgba(16,35,63,.10); }
-          .head { padding: 26px 30px; background: #10233f; color: white; display: flex; justify-content: space-between; align-items: center; }
-          .brand { display: flex; align-items: center; gap: 14px; }
-          .logo { width: 52px; height: 52px; border-radius: 14px; background: #1264e3; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 20px; }
+          .head { padding: 26px 30px; background: #081735; color: white; display: flex; justify-content: space-between; align-items: center; }
+          .brand { display: flex; align-items: center; gap: 18px; }
+          .brand-logo { width: 180px; height: 42px; display: flex; align-items: center; }
+          .brand-logo svg { width: 180px; height: 42px; display: block; }
           h1 { margin: 0; font-size: 25px; }
           .subtitle { margin-top: 4px; color: #cfe0f7; font-size: 13px; }
           .content { padding: 30px; display: grid; grid-template-columns: 260px 1fr; gap: 30px; }
           .qr { text-align: center; }
           .qr img { width: 240px; height: 240px; border: 1px solid #dce4ee; border-radius: 16px; }
-          .qr-code { margin-top: 10px; font-weight: 800; color: #1264e3; font-size: 15px; }
+          .qr-code { margin-top: 10px; font-weight: 800; color: #087fe5; font-size: 15px; }
           .qr-help { margin-top: 4px; color: #53647a; font-size: 12px; }
           .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 22px; align-content: start; }
           .field { border-bottom: 1px solid #dce4ee; padding-bottom: 10px; }
@@ -62,8 +64,8 @@ export function buildMachineCardHtml(machine: Machine): string {
         <div class="card">
           <div class="head">
             <div class="brand">
-              <div class="logo">CM</div>
-              <div><h1>Makine QR Kimlik Kartı</h1><div class="subtitle">Akıllı Bakım CMMS · Endüstriyel Ekipman Tanımlama</div></div>
+              <div class="brand-logo" aria-label="Meknivo">${BRAND_SVG.monochromeWhite}</div>
+              <div><h1>Makine QR Kimlik Kartı</h1><div class="subtitle">Meknivo CMMS · Endüstriyel Ekipman Tanımlama</div></div>
             </div>
           </div>
           <div class="content">
