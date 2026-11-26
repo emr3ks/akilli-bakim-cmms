@@ -164,5 +164,16 @@ export async function getStatusCounts(database) {
     }
   }
   counts.total = Object.values(counts).reduce((total, count) => total + count, 0);
+
+  const openFaults = await get(
+    database,
+    "SELECT COUNT(*) AS count FROM faults WHERE status = 'open'",
+  );
+  const activeWorkOrders = await get(
+    database,
+    "SELECT COUNT(*) AS count FROM work_orders WHERE status NOT IN ('resolved', 'closed')",
+  );
+  counts.openFaults = Number(openFaults?.count || 0);
+  counts.activeWorkOrders = Number(activeWorkOrders?.count || 0);
   return counts;
 }

@@ -37,6 +37,16 @@ async function capture(page, filename) {
   console.log(`Captured ${destination}`);
 }
 
+async function assertNoHorizontalOverflow(page, label) {
+  const widths = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  if (widths.scrollWidth > widths.clientWidth + 1) {
+    throw new Error(`${label} has horizontal overflow (${widths.scrollWidth}px > ${widths.clientWidth}px).`);
+  }
+}
+
 const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 const mobile = await preparePage(mobileContext);
 await mobile.goto(appUrl, { waitUntil: 'domcontentloaded' });
@@ -46,8 +56,14 @@ await capture(mobile, 'after-mobile-login.png');
 await mobile.getByTestId('demo-login-admin').click();
 await mobile.getByText('Bakım özeti').waitFor({ state: 'visible', timeout: 30_000 });
 await capture(mobile, 'after-mobile-dashboard.png');
+await assertNoHorizontalOverflow(mobile, 'Mobile dashboard');
 
-await mobile.getByText('Envanter', { exact: true }).click();
+await mobile.getByTestId('tab-workorders').click();
+await mobile.getByTestId('work-orders-screen').waitFor({ state: 'visible', timeout: 30_000 });
+await capture(mobile, 'after-mobile-work-orders.png');
+await assertNoHorizontalOverflow(mobile, 'Mobile work-order screen');
+
+await mobile.getByTestId('tab-inventory').click();
 await mobile.getByTestId('inventory-screen').waitFor({ state: 'visible', timeout: 30_000 });
 await mobile.getByText('MCH-2026-001').waitFor({ state: 'visible', timeout: 30_000 });
 if (!(await mobile.getByText('+ Makine ekle').isVisible())) {
@@ -63,6 +79,12 @@ await mobile.getByText('MCH-2026-001').click();
 await mobile.getByTestId('machine-detail-screen').waitFor({ state: 'visible', timeout: 30_000 });
 await mobile.getByText('Makine QR kimliği').waitFor({ state: 'visible', timeout: 30_000 });
 await capture(mobile, 'after-mobile-machine-detail.png');
+
+await mobile.getByTestId('open-fault-report').click();
+await mobile.getByTestId('fault-report-modal').waitFor({ state: 'visible', timeout: 30_000 });
+await capture(mobile, 'after-mobile-fault-report.png');
+await assertNoHorizontalOverflow(mobile, 'Mobile fault-report form');
+await mobile.getByTestId('fault-report-modal').getByText('Kapat', { exact: true }).click();
 
 await mobile.getByLabel('Makine kartını kapat').click();
 await mobile.getByText('QR Okut', { exact: true }).click();
@@ -81,12 +103,24 @@ await desktop.getByText('Hızlı Demo Giriş').waitFor({ state: 'visible', timeo
 await desktop.getByTestId('demo-login-technician').click();
 await desktop.getByText('Bakım özeti').waitFor({ state: 'visible', timeout: 30_000 });
 await capture(desktop, 'after-desktop-dashboard.png');
-await desktop.getByText('Envanter', { exact: true }).click();
+await desktop.getByTestId('tab-inventory').click();
 await desktop.getByTestId('inventory-screen').waitFor({ state: 'visible', timeout: 30_000 });
 if (await desktop.getByText('+ Makine ekle').count()) {
   throw new Error('Technician inventory unexpectedly exposed the admin machine creation action.');
 }
 await desktopContext.close();
+
+const adminContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+const admin = await preparePage(adminContext);
+await admin.goto(appUrl, { waitUntil: 'domcontentloaded' });
+await admin.getByText('Hızlı Demo Giriş').waitFor({ state: 'visible', timeout: 90_000 });
+await admin.getByTestId('demo-login-admin').click();
+await admin.getByText('Bakım özeti').waitFor({ state: 'visible', timeout: 30_000 });
+await admin.getByTestId('tab-workorders').click();
+await admin.getByTestId('work-orders-screen').waitFor({ state: 'visible', timeout: 30_000 });
+await capture(admin, 'after-desktop-work-orders.png');
+await assertNoHorizontalOverflow(admin, 'Desktop work-order screen');
+await adminContext.close();
 
 await browser.close();
 

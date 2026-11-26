@@ -11,6 +11,7 @@ import {
 import QRCode from 'react-native-qrcode-svg';
 
 import { api } from '../api';
+import { FaultReportModal } from '../components/FaultReportModal';
 import { exportMachineCardPdf, printMachineCard } from '../printing';
 import { colors, radius, spacing, typography } from '../theme';
 import type { Machine, MachineRecord, RecordType, User } from '../types';
@@ -60,6 +61,7 @@ export function MachineDetailScreen({ machine, user, onClose, onChanged, onDelet
   const [recordType, setRecordType] = useState<RecordType>(user.role === 'operator' ? 'fault' : 'maintenance');
   const [submitting, setSubmitting] = useState(false);
   const [formVisible, setFormVisible] = useState(false);
+  const [faultFormVisible, setFaultFormVisible] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -204,48 +206,56 @@ export function MachineDetailScreen({ machine, user, onClose, onChanged, onDelet
             </Card>
 
             <Card style={styles.recordCard}>
-              <SectionTitle title={user.role === 'operator' ? 'Hızlı arıza bildirimi' : 'Bakım / arıza kaydı'} />
+              <SectionTitle title="Hızlı arıza bildirimi" />
               <Text style={styles.cardDescription}>
-                {user.role === 'operator'
-                  ? 'Tespit ettiğiniz sorunu kaydedin; makine otomatik olarak arızalı olarak işaretlenir.'
-                  : 'Bakım veya arıza kaydı oluşturun; makine durumu kayıt türüne göre güncellenir.'}
+                Tespit ettiğiniz sorunu başlık, aciliyet ve fotoğrafla saniyeler içinde bildirin.
               </Text>
-              {user.role !== 'operator' ? (
-                <OptionPicker
-                  label="Kayıt türü"
-                  value={recordType}
-                  onChange={setRecordType}
-                  options={[
-                    { value: 'maintenance', label: 'Bakım' },
-                    { value: 'fault', label: 'Arıza' },
-                  ]}
-                />
-              ) : null}
-              <FormField
-                label="Açıklama"
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Örn. Motor sesi anormal ve eksen titriyor…"
-                multiline
-                maxLength={4000}
-              />
-              <OptionPicker
-                label="Önem seviyesi"
-                value={severity}
-                onChange={setSeverity}
-                options={[
-                  { value: 'low', label: 'Düşük' },
-                  { value: 'medium', label: 'Orta' },
-                  { value: 'high', label: 'Yüksek' },
-                ]}
-              />
-              {actionMessage ? <Text style={styles.actionMessage}>{actionMessage}</Text> : null}
               <Button
-                title={recordType === 'fault' ? 'Arıza bildir' : 'Bakım kaydı oluştur'}
-                onPress={() => void submitRecord()}
-                loading={submitting}
-                variant={recordType === 'fault' ? 'danger' : 'primary'}
+                title="Arıza Bildir"
+                onPress={() => setFaultFormVisible(true)}
+                variant="danger"
+                testID="open-fault-report"
               />
+              {user.role !== 'operator' ? (
+                <>
+                  <View style={styles.legacyDivider} />
+                  <SectionTitle title="Faz 1 bakım kaydı" />
+                  <OptionPicker
+                    label="Kayıt türü"
+                    value={recordType}
+                    onChange={setRecordType}
+                    options={[
+                      { value: 'maintenance', label: 'Bakım' },
+                      { value: 'fault', label: 'Arıza' },
+                    ]}
+                  />
+                  <FormField
+                    label="Açıklama"
+                    value={description}
+                    onChangeText={setDescription}
+                    placeholder="Örn. Motor sesi anormal ve eksen titriyor…"
+                    multiline
+                    maxLength={4000}
+                  />
+                  <OptionPicker
+                    label="Önem seviyesi"
+                    value={severity}
+                    onChange={setSeverity}
+                    options={[
+                      { value: 'low', label: 'Düşük' },
+                      { value: 'medium', label: 'Orta' },
+                      { value: 'high', label: 'Yüksek' },
+                    ]}
+                  />
+                  <Button
+                    title={recordType === 'fault' ? 'Eski arıza kaydı oluştur' : 'Bakım kaydı oluştur'}
+                    onPress={() => void submitRecord()}
+                    loading={submitting}
+                    variant="secondary"
+                  />
+                </>
+              ) : null}
+              {actionMessage ? <Text style={styles.actionMessage}>{actionMessage}</Text> : null}
             </Card>
 
             <Card>
@@ -291,6 +301,18 @@ export function MachineDetailScreen({ machine, user, onClose, onChanged, onDelet
         </View>
       </ScrollView>
 
+      <FaultReportModal
+        visible={faultFormVisible}
+        machine={current}
+        user={user}
+        onClose={() => setFaultFormVisible(false)}
+        onReported={(fault) => {
+          setFaultFormVisible(false);
+          setActionMessage(`${fault.code} numaralı arıza bildirimi oluşturuldu.`);
+          void load();
+        }}
+      />
+
       <MachineFormModal
         visible={formVisible}
         machine={current}
@@ -323,6 +345,7 @@ const styles = StyleSheet.create({
   mainColumn: { flexGrow: 1, flexBasis: '58%', minWidth: 300, gap: spacing.lg },
   sideColumn: { flexGrow: 1, flexBasis: '36%', minWidth: 280, gap: spacing.lg },
   recordCard: { gap: spacing.sm },
+  legacyDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: spacing.sm },
   cardDescription: { ...typography.body, color: colors.inkMuted, marginBottom: spacing.md },
   actionMessage: { ...typography.caption, color: colors.primaryDark, backgroundColor: colors.primarySoft, borderRadius: radius.sm, padding: spacing.md },
   count: { ...typography.caption, color: colors.inkMuted },

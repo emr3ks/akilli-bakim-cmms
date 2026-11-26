@@ -16,14 +16,35 @@ import {
   createMachineRecord,
   listMachineRecords,
 } from './services/record-service.js';
-import { validateMachineFilters, validateRecordPayload } from './validators.js';
+import {
+  createFault,
+  getFaultOrThrow,
+  listFaultRecords,
+} from './services/fault-service.js';
+import {
+  assignWorkOrder,
+  createWorkOrder,
+  getWorkOrderOrThrow,
+  listManagedWorkOrders,
+  updateWorkOrderStatus,
+} from './services/work-order-service.js';
+import {
+  validateFaultFilters,
+  validateMachineFilters,
+  validateRecordPayload,
+  validateWorkOrderFilters,
+} from './validators.js';
+
+function parsePositiveId(value, label = 'Resource id') {
+  const id = Number(value);
+  if (!Number.isInteger(id) || id < 1) {
+    throw validationError(`${label} must be a positive integer`);
+  }
+  return id;
+}
 
 function parseMachineId(value) {
-  const machineId = Number(value);
-  if (!Number.isInteger(machineId) || machineId < 1) {
-    throw validationError('Machine id must be a positive integer');
-  }
-  return machineId;
+  return parsePositiveId(value, 'Machine id');
 }
 
 function prepareDatabase(input, dbPath) {
@@ -63,7 +84,7 @@ export function createApp(options = {}) {
   app.locals.ready = app.ready;
 
   app.use(cors());
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '10mb' }));
 
   app.use(asyncHandler(async (request, response, next) => {
     request.db = await app.ready;
@@ -98,6 +119,83 @@ export function createApp(options = {}) {
   api.get('/dashboard/summary', asyncHandler(async (request, response) => {
     response.json(await getStatusCounts(request.db));
   }));
+
+  api.get('/faults', asyncHandler(async (request, response) => {
+    const filters = validateFaultFilters(request.query);
+    const faults = await listFaultRecords(request.db, filters);
+    response.json({ faults });
+  }));
+
+  api.get('/faults/:id', asyncHandler(async (request, response) => {
+    const faultId = parsePositiveId(request.params.id, 'Fault id');
+    const fault = await getFaultOrThrow(request.db, faultId);
+    response.json({ fault });
+  }));
+
+  api.post('/faults', asyncHandler(async (request, response) => {
+    const fault = await createFault(request.db, request.body, request.user);
+    response.status(201).json({ fault });
+  }));
+
+  api.post('/machines/:id/faults', asyncHandler(async (request, response) => {
+    const machineId = parseMachineId(request.params.id);
+    const fault = await createFault(
+      request.db,
+      { ...(request.body || {}), machineId },
+      request.user,
+    );
+    response.status(201).json({ fault });
+  }));
+
+  api.get('/work-orders', asyncHandler(async (request, response) => {
+    const filters = validateWorkOrderFilters(request.query);
+    const workOrders = await listManagedWorkOrders(request.db, filters);
+    response.json({ workOrders });
+  }));
+
+  api.get('/work-orders/:id', asyncHandler(async (request, response) => {
+    const workOrderId = parsePositiveId(request.params.id, 'Work order id');
+    const workOrder = await getWorkOrderOrThrow(request.db, workOrderId);
+    response.json({ workOrder });
+  }));
+
+  api.post('/work-orders', requireRole('admin'), asyncHandler(async (request, response) => {
+    const workOrder = await createWorkOrder(request.db, request.body, request.user);
+    response.status(201).json({ workOrder });
+  }));
+
+  api.post('/faults/:faultId/work-orders', requireRole('admin'), asyncHandler(async (request, response) => {
+    const faultId = parsePositiveId(request.params.faultId, 'Fault id');
+    const workOrder = await createWorkOrder(
+      request.db,
+      { ...(request.body || {}), faultId },
+      request.user,
+    );
+    response.status(201).json({ workOrder });
+  }));
+
+  const assignWorkOrderHandler = asyncHandler(async (request, response) => {
+    const workOrderId = parsePositiveId(request.params.id, 'Work order id');
+    const workOrder = await assignWorkOrder(request.db, workOrderId, request.body);
+    response.json({ workOrder });
+  });
+  api.post('/work-orders/:id/assign', requireRole('admin'), assignWorkOrderHandler);
+  api.patch('/work-orders/:id/assign', requireRole('admin'), assignWorkOrderHandler);
+
+  api.patch(
+    '/work-orders/:id/status',
+    requireRole('admin', 'technician'),
+    asyncHandler(async (request, response) => {
+      const workOrderId = parsePositiveId(request.params.id, 'Work order id');
+      const workOrder = await updateWorkOrderStatus(
+        request.db,
+        workOrderId,
+        request.body,
+        request.user,
+      );
+      response.json({ workOrder });
+    }),
+  );
 
   api.get('/machines', asyncHandler(async (request, response) => {
     const filters = validateMachineFilters(request.query);
@@ -180,6 +278,16 @@ export function createApp(options = {}) {
   app.use((error, request, response, next) => {
     if (response.headersSent) {
       next(error);
+      return;
+    }
+
+    if (error?.type === 'entity.too.large') {
+      response.status(413).json({
+        error: {
+          message: 'Request body is too large',
+          code: 'PAYLOAD_TOO_LARGE',
+        },
+      });
       return;
     }
 

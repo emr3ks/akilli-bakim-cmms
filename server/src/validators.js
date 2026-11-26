@@ -5,6 +5,27 @@ export const CRITICALITIES = ['high', 'medium', 'low'];
 export const MACHINE_STATUSES = ['running', 'maintenance', 'faulted', 'stopped'];
 export const USER_ROLES = ['admin', 'technician', 'operator'];
 export const RECORD_TYPES = ['maintenance', 'fault'];
+export const FAULT_CATEGORIES = [
+  'mechanical',
+  'electrical',
+  'pneumatic_hydraulic',
+  'software_sensor',
+  'other',
+];
+export const FAULT_URGENCIES = ['critical', 'high', 'medium', 'low'];
+export const FAULT_STATUSES = ['open', 'resolved'];
+export const WORK_ORDER_STATUSES = [
+  'open',
+  'assigned',
+  'in_progress',
+  'waiting_parts',
+  'resolved',
+  'closed',
+];
+export const FINAL_WORK_ORDER_STATUSES = ['resolved', 'closed'];
+export const MAX_PHOTO_LENGTH = 7_000_000;
+export const MAX_PHOTO_BASE64_LENGTH = 3_000_000;
+export const PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -130,4 +151,221 @@ export function validateRecordPayload(payload, { requiredType = true } = {}) {
   }
 
   return data;
+}
+
+function positiveInteger(value, label) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw validationError(`${label} must be a positive integer`);
+  }
+  return parsed;
+}
+
+function validatePhotoDataUrl(value, label) {
+  if (typeof value !== 'string' || !value.startsWith('data:image/') || !value.includes(';base64,')) {
+    throw validationError(`${label} must be a base64-encoded image data URL`);
+  }
+  if (value.length > MAX_PHOTO_LENGTH) {
+    throw validationError(`${label} must be 7000000 characters or fewer`);
+  }
+  return value;
+}
+
+function normalizePhotoPayload(payload, options) {
+  const { valueKey, base64Key, mimeKey, label } = options;
+  const compatibilityValue = payload[valueKey];
+  const base64 = payload[base64Key];
+  const mimeType = payload[mimeKey];
+
+  if (base64 !== undefined || mimeType !== undefined) {
+    if (typeof base64 !== 'string' || !base64.trim()) {
+      throw validationError(`${base64Key} must be a non-empty base64 string`);
+    }
+    if (!PHOTO_MIME_TYPES.includes(mimeType)) {
+      throw validationError(`${mimeKey} must be one of: ${PHOTO_MIME_TYPES.join(', ')}`);
+    }
+    const normalizedBase64 = base64.trim();
+    if (normalizedBase64.length > MAX_PHOTO_BASE64_LENGTH) {
+      throw validationError(`${base64Key} must be 3000000 characters or fewer`);
+    }
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalizedBase64)) {
+      throw validationError(`${base64Key} must contain valid base64 data`);
+    }
+    return `data:${mimeType};base64,${normalizedBase64}`;
+  }
+
+  if (compatibilityValue === undefined || compatibilityValue === null || compatibilityValue === '') {
+    return null;
+  }
+  return validatePhotoDataUrl(compatibilityValue, label);
+}
+
+export function validateFaultPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw validationError('Fault request body must be a JSON object');
+  }
+
+  const data = {
+    machineId: positiveInteger(payload.machineId, 'Fault machineId'),
+  };
+
+  if (!isNonEmptyString(payload.title)) {
+    throw validationError('Fault title is required and must be a non-empty string');
+  }
+  data.title = payload.title.trim();
+  if (data.title.length > 160) {
+    throw validationError('Fault title must be 160 characters or fewer');
+  }
+
+  if (!FAULT_CATEGORIES.includes(payload.category)) {
+    throw validationError(`Fault category must be one of: ${FAULT_CATEGORIES.join(', ')}`);
+  }
+  data.category = payload.category;
+
+  if (!FAULT_URGENCIES.includes(payload.urgency)) {
+    throw validationError(`Fault urgency must be one of: ${FAULT_URGENCIES.join(', ')}`);
+  }
+  data.urgency = payload.urgency;
+
+  if (!isNonEmptyString(payload.description)) {
+    throw validationError('Fault description is required and must be a non-empty string');
+  }
+  data.description = payload.description.trim();
+  if (data.description.length > 4000) {
+    throw validationError('Fault description must be 4000 characters or fewer');
+  }
+
+  data.photo = normalizePhotoPayload(payload, {
+    valueKey: 'photo',
+    base64Key: 'photoBase64',
+    mimeKey: 'photoMimeType',
+    label: 'Fault photo',
+  });
+  return data;
+}
+
+export function validateFaultFilters(query = {}) {
+  const filters = {};
+  if (query.status !== undefined && query.status !== '') {
+    if (!FAULT_STATUSES.includes(query.status)) {
+      throw validationError(`status must be one of: ${FAULT_STATUSES.join(', ')}`);
+    }
+    filters.status = query.status;
+  }
+  if (query.urgency !== undefined && query.urgency !== '') {
+    if (!FAULT_URGENCIES.includes(query.urgency)) {
+      throw validationError(`urgency must be one of: ${FAULT_URGENCIES.join(', ')}`);
+    }
+    filters.urgency = query.urgency;
+  }
+  const assignedTo = query.assignedTo ?? query.technicianId;
+  if (assignedTo !== undefined && assignedTo !== '') {
+    filters.assignedTo = positiveInteger(assignedTo, 'assignedTo');
+  }
+  if (query.machineId !== undefined && query.machineId !== '') {
+    filters.machineId = positiveInteger(query.machineId, 'machineId');
+  }
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string') throw validationError('q must be a string');
+    filters.q = query.q.trim();
+  }
+  return filters;
+}
+
+export function validateWorkOrderPayload(payload, { requireFaultId = true } = {}) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw validationError('Work order request body must be a JSON object');
+  }
+
+  const data = {};
+  if (requireFaultId || payload.faultId !== undefined) {
+    data.faultId = positiveInteger(payload.faultId, 'Work order faultId');
+  }
+  const assignedTo = payload.assignedTo ?? payload.technicianId;
+  if (assignedTo !== undefined && assignedTo !== null && assignedTo !== '') {
+    data.assignedTo = positiveInteger(assignedTo, 'assignedTo');
+  }
+  return data;
+}
+
+export function validateAssignmentPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw validationError('Assignment request body must be a JSON object');
+  }
+  const assignedTo = payload.assignedTo ?? payload.technicianId;
+  return { assignedTo: positiveInteger(assignedTo, 'assignedTo') };
+}
+
+export function validateWorkOrderStatusPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw validationError('Work order status request body must be a JSON object');
+  }
+  if (!WORK_ORDER_STATUSES.includes(payload.status)) {
+    throw validationError(`Work order status must be one of: ${WORK_ORDER_STATUSES.join(', ')}`);
+  }
+
+  const data = { status: payload.status };
+  if (payload.interventionNote !== undefined && payload.interventionNote !== null) {
+    if (!isNonEmptyString(payload.interventionNote)) {
+      throw validationError('interventionNote must be a non-empty string');
+    }
+    data.interventionNote = payload.interventionNote.trim();
+    if (data.interventionNote.length > 4000) {
+      throw validationError('interventionNote must be 4000 characters or fewer');
+    }
+  }
+  if (payload.rootCause !== undefined && payload.rootCause !== null) {
+    if (!isNonEmptyString(payload.rootCause)) {
+      throw validationError('rootCause must be a non-empty string');
+    }
+    data.rootCause = payload.rootCause.trim();
+    if (data.rootCause.length > 4000) {
+      throw validationError('rootCause must be 4000 characters or fewer');
+    }
+  }
+  if (payload.durationMinutes !== undefined && payload.durationMinutes !== null) {
+    const duration = Number(payload.durationMinutes);
+    if (!Number.isInteger(duration) || duration < 0 || duration > 100000) {
+      throw validationError('durationMinutes must be an integer between 0 and 100000');
+    }
+    data.durationMinutes = duration;
+  }
+  if (payload.solutionPhoto !== undefined
+    || payload.solutionPhotoBase64 !== undefined
+    || payload.solutionPhotoMimeType !== undefined) {
+    data.solutionPhoto = normalizePhotoPayload(payload, {
+      valueKey: 'solutionPhoto',
+      base64Key: 'solutionPhotoBase64',
+      mimeKey: 'solutionPhotoMimeType',
+      label: 'Solution photo',
+    });
+  }
+  return data;
+}
+
+export function validateWorkOrderFilters(query = {}) {
+  const filters = {};
+  if (query.status !== undefined && query.status !== '') {
+    if (!WORK_ORDER_STATUSES.includes(query.status)) {
+      throw validationError(`status must be one of: ${WORK_ORDER_STATUSES.join(', ')}`);
+    }
+    filters.status = query.status;
+  }
+  if (query.urgency !== undefined && query.urgency !== '') {
+    if (!FAULT_URGENCIES.includes(query.urgency)) {
+      throw validationError(`urgency must be one of: ${FAULT_URGENCIES.join(', ')}`);
+    }
+    filters.urgency = query.urgency;
+  }
+  const assignedTo = query.assignedTo ?? query.technicianId;
+  if (assignedTo !== undefined && assignedTo !== '') {
+    filters.assignedTo = positiveInteger(assignedTo, 'assignedTo');
+  }
+  if (query.faultId !== undefined && query.faultId !== '') {
+    filters.faultId = positiveInteger(query.faultId, 'faultId');
+  }
+  if (query.machineId !== undefined && query.machineId !== '') {
+    filters.machineId = positiveInteger(query.machineId, 'machineId');
+  }
+  return filters;
 }

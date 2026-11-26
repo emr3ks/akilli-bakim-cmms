@@ -42,8 +42,8 @@ describe('CMMS API', () => {
     expect(summary.status).toBe(200);
     expect(summary.body).toMatchObject({
       total: 7,
-      running: 4,
-      maintenance: 1,
+      running: 3,
+      maintenance: 2,
       faulted: 1,
       stopped: 1,
     });

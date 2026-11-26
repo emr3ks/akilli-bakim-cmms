@@ -17,13 +17,15 @@ import { InventoryScreen } from './src/screens/InventoryScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { MachineDetailScreen } from './src/screens/MachineDetailScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
+import { WorkOrdersScreen } from './src/screens/WorkOrdersScreen';
 
 const SESSION_KEY = 'cmms.session.v1';
-type Tab = 'dashboard' | 'inventory' | 'scanner';
+type Tab = 'dashboard' | 'inventory' | 'workorders' | 'scanner';
 
 const tabs: { key: Tab; label: string; icon: string }[] = [
   { key: 'dashboard', label: 'Özet', icon: '◫' },
   { key: 'inventory', label: 'Envanter', icon: '▦' },
+  { key: 'workorders', label: 'Arıza / İş', icon: '⚑' },
   { key: 'scanner', label: 'QR Okut', icon: '⌗' },
 ];
 
@@ -102,7 +104,7 @@ export default function App() {
               <View style={styles.brandMark}><Text style={styles.brandMarkText}>CM</Text></View>
               <View>
                 <Text style={styles.brandName}>Akıllı Bakım</Text>
-                <Text style={styles.brandSubtitle}>CMMS · Faz 1</Text>
+                <Text style={styles.brandSubtitle}>CMMS · Faz 2</Text>
               </View>
             </View>
             <View style={styles.profileRow}>
@@ -132,9 +134,12 @@ export default function App() {
                 onOpenMachine={setSelectedMachine}
                 onOpenInventory={() => setTab('inventory')}
                 onOpenScanner={() => setTab('scanner')}
+                onOpenWorkOrders={() => setTab('workorders')}
               />
             ) : tab === 'inventory' ? (
               <InventoryScreen user={user} onOpenMachine={setSelectedMachine} />
+            ) : tab === 'workorders' ? (
+              <WorkOrdersScreen user={user} />
             ) : (
               <ScannerScreen user={user} onOpenMachine={setSelectedMachine} />
             )}
@@ -150,6 +155,7 @@ export default function App() {
                       accessibilityRole="tab"
                       accessibilityState={{ selected: active }}
                       accessibilityLabel={item.label}
+                      testID={`tab-${item.key}`}
                       key={item.key}
                       onPress={() => setTab(item.key)}
                       style={[styles.navItem, active && styles.navItemActive]}
