@@ -30,14 +30,28 @@ const ALLOWED_TRANSITIONS = {
   closed: [],
 };
 
-export async function getWorkOrderOrThrow(database, workOrderId) {
+export async function getWorkOrderOrThrow(database, workOrderId, user) {
   const workOrder = await findWorkOrderById(database, workOrderId);
   if (!workOrder) throw notFound('Work order not found', 'WORK_ORDER_NOT_FOUND');
+  if (!user || user.role === 'admin') return workOrder;
+  if (user.role === 'operator') {
+    throw forbidden('Work orders are not available to operators');
+  }
+  if (user.role === 'technician' && workOrder.assignedTo?.id !== user.id) {
+    throw forbidden('Only the assigned technician can view this work order');
+  }
   return workOrder;
 }
 
-export async function listManagedWorkOrders(database, filters = {}) {
-  return listWorkOrders(database, filters);
+export async function listManagedWorkOrders(database, filters = {}, user) {
+  if (user?.role === 'operator') {
+    throw forbidden('Work orders are not available to operators');
+  }
+  const scopedFilters = { ...filters };
+  if (user?.role === 'technician') {
+    scopedFilters.assignedTo = user.id;
+  }
+  return listWorkOrders(database, scopedFilters);
 }
 
 async function requireTechnician(database, technicianId) {
@@ -131,11 +145,15 @@ function assertValidTransition(workOrder, nextStatus) {
 }
 
 function mergeCompletion(workOrder, data) {
+  const existingSolutionPhoto = workOrder.solutionPhoto
+    ?? (workOrder.solutionPhotoBase64 && workOrder.solutionPhotoMimeType
+      ? `data:${workOrder.solutionPhotoMimeType};base64,${workOrder.solutionPhotoBase64}`
+      : null);
   const completion = {
     interventionNote: data.interventionNote ?? workOrder.interventionNote,
     rootCause: data.rootCause ?? workOrder.rootCause,
     durationMinutes: data.durationMinutes ?? workOrder.durationMinutes,
-    solutionPhoto: data.solutionPhoto ?? workOrder.solutionPhoto,
+    solutionPhoto: data.solutionPhoto ?? existingSolutionPhoto,
   };
 
   if (completion.interventionNote === null || completion.rootCause === null
@@ -163,8 +181,9 @@ export async function updateWorkOrderStatus(database, workOrderId, payload, user
     assertValidTransition(workOrder, data.status);
     assertCanProgress(workOrder, user);
 
-    const finalStatus = data.status === 'resolved' || data.status === 'closed';
-    const completion = finalStatus
+    const requiresCompletion = data.status === 'resolved' || data.status === 'closed';
+    const closingStatus = data.status === 'closed';
+    const completion = requiresCompletion
       ? mergeCompletion(workOrder, data)
       : {
           ...(data.interventionNote !== undefined ? { interventionNote: data.interventionNote } : {}),
@@ -181,19 +200,19 @@ export async function updateWorkOrderStatus(database, workOrderId, payload, user
     if (data.status === 'in_progress' && !workOrder.startedAt) {
       updates.startedAt = timestamp;
     }
-    if (finalStatus) {
+    if (closingStatus) {
       updates.closedAt = workOrder.closedAt || timestamp;
     }
 
     const updated = await updateWorkOrder(database, workOrder.id, updates);
-    if (finalStatus) {
+    if (closingStatus) {
       await updateFaultStatus(database, workOrder.faultId, 'resolved');
       const otherCriticalFault = await hasOtherOpenCriticalFault(
         database,
         workOrder.machine.id,
         workOrder.faultId,
       );
-      if (!otherCriticalFault) {
+      if (workOrder.machine.status === 'faulted' && !otherCriticalFault) {
         await setMachineStatus(database, workOrder.machine.id, 'running');
       }
     }

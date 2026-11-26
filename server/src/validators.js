@@ -23,8 +23,8 @@ export const WORK_ORDER_STATUSES = [
   'closed',
 ];
 export const FINAL_WORK_ORDER_STATUSES = ['resolved', 'closed'];
-export const MAX_PHOTO_LENGTH = 7_000_000;
-export const MAX_PHOTO_BASE64_LENGTH = 3_000_000;
+export const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+export const MAX_PHOTO_BASE64_LENGTH = 2_800_000;
 export const PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 function isNonEmptyString(value) {
@@ -161,43 +161,64 @@ function positiveInteger(value, label) {
   return parsed;
 }
 
-function validatePhotoDataUrl(value, label) {
-  if (typeof value !== 'string' || !value.startsWith('data:image/') || !value.includes(';base64,')) {
-    throw validationError(`${label} must be a base64-encoded image data URL`);
+function detectImageMime(buffer) {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return 'image/jpeg';
   }
-  if (value.length > MAX_PHOTO_LENGTH) {
-    throw validationError(`${label} must be 7000000 characters or fewer`);
+  if (
+    buffer.length >= 8
+    && buffer[0] === 0x89
+    && buffer[1] === 0x50
+    && buffer[2] === 0x4e
+    && buffer[3] === 0x47
+    && buffer[4] === 0x0d
+    && buffer[5] === 0x0a
+    && buffer[6] === 0x1a
+    && buffer[7] === 0x0a
+  ) {
+    return 'image/png';
   }
-  return value;
+  if (
+    buffer.length >= 12
+    && buffer.toString('ascii', 0, 4) === 'RIFF'
+    && buffer.toString('ascii', 8, 12) === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+  return null;
 }
 
 function normalizePhotoPayload(payload, options) {
-  const { valueKey, base64Key, mimeKey, label } = options;
-  const compatibilityValue = payload[valueKey];
+  const { base64Key, mimeKey, label } = options;
   const base64 = payload[base64Key];
   const mimeType = payload[mimeKey];
 
-  if (base64 !== undefined || mimeType !== undefined) {
-    if (typeof base64 !== 'string' || !base64.trim()) {
-      throw validationError(`${base64Key} must be a non-empty base64 string`);
-    }
-    if (!PHOTO_MIME_TYPES.includes(mimeType)) {
-      throw validationError(`${mimeKey} must be one of: ${PHOTO_MIME_TYPES.join(', ')}`);
-    }
-    const normalizedBase64 = base64.trim();
-    if (normalizedBase64.length > MAX_PHOTO_BASE64_LENGTH) {
-      throw validationError(`${base64Key} must be 3000000 characters or fewer`);
-    }
-    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalizedBase64)) {
-      throw validationError(`${base64Key} must contain valid base64 data`);
-    }
-    return `data:${mimeType};base64,${normalizedBase64}`;
+  if (base64 === undefined && mimeType === undefined) return null;
+  if (typeof base64 !== 'string' || !base64.trim()) {
+    throw validationError(`${base64Key} must be a non-empty base64 string`);
+  }
+  if (!PHOTO_MIME_TYPES.includes(mimeType)) {
+    throw validationError(`${mimeKey} must be one of: ${PHOTO_MIME_TYPES.join(', ')}`);
   }
 
-  if (compatibilityValue === undefined || compatibilityValue === null || compatibilityValue === '') {
-    return null;
+  const normalizedBase64 = base64.trim();
+  if (normalizedBase64.length > MAX_PHOTO_BASE64_LENGTH) {
+    throw validationError(`${base64Key} must be 2800000 characters or fewer`);
   }
-  return validatePhotoDataUrl(compatibilityValue, label);
+  if (normalizedBase64.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalizedBase64)) {
+    throw validationError(`${base64Key} must contain valid base64 data`);
+  }
+
+  const bytes = Buffer.from(normalizedBase64, 'base64');
+  if (bytes.length === 0 || bytes.length > MAX_PHOTO_BYTES) {
+    throw validationError(`${label} must contain an image no larger than 2 MB`);
+  }
+  const detectedMime = detectImageMime(bytes);
+  if (!detectedMime || detectedMime !== mimeType) {
+    throw validationError(`${label} content does not match ${mimeType}`);
+  }
+
+  return `data:${mimeType};base64,${normalizedBase64}`;
 }
 
 export function validateFaultPayload(payload) {
@@ -235,8 +256,10 @@ export function validateFaultPayload(payload) {
     throw validationError('Fault description must be 4000 characters or fewer');
   }
 
+  if (payload.photo !== undefined) {
+    throw validationError('Use photoBase64 and photoMimeType for fault photos');
+  }
   data.photo = normalizePhotoPayload(payload, {
-    valueKey: 'photo',
     base64Key: 'photoBase64',
     mimeKey: 'photoMimeType',
     label: 'Fault photo',
@@ -325,16 +348,17 @@ export function validateWorkOrderStatusPayload(payload) {
   }
   if (payload.durationMinutes !== undefined && payload.durationMinutes !== null) {
     const duration = Number(payload.durationMinutes);
-    if (!Number.isInteger(duration) || duration < 0 || duration > 100000) {
-      throw validationError('durationMinutes must be an integer between 0 and 100000');
+    if (!Number.isInteger(duration) || duration < 1 || duration > 100000) {
+      throw validationError('durationMinutes must be an integer between 1 and 100000');
     }
     data.durationMinutes = duration;
   }
-  if (payload.solutionPhoto !== undefined
-    || payload.solutionPhotoBase64 !== undefined
+  if (payload.solutionPhoto !== undefined) {
+    throw validationError('Use solutionPhotoBase64 and solutionPhotoMimeType for solution photos');
+  }
+  if (payload.solutionPhotoBase64 !== undefined
     || payload.solutionPhotoMimeType !== undefined) {
     data.solutionPhoto = normalizePhotoPayload(payload, {
-      valueKey: 'solutionPhoto',
       base64Key: 'solutionPhotoBase64',
       mimeKey: 'solutionPhotoMimeType',
       label: 'Solution photo',

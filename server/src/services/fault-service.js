@@ -9,14 +9,30 @@ import {
 import { validateFaultPayload } from '../validators.js';
 import { generateDocumentCode } from './document-code.js';
 
-export async function getFaultOrThrow(database, faultId) {
+export async function getFaultOrThrow(database, faultId, user) {
   const fault = await findFaultById(database, faultId);
   if (!fault) throw notFound('Fault not found', 'FAULT_NOT_FOUND');
-  return fault;
+
+  if (user?.role === 'admin') return fault;
+  if (user?.role === 'operator' && fault.reportedBy.id === user.id) return fault;
+  if (
+    user?.role === 'technician'
+    && (fault.reportedBy.id === user.id || fault.workOrder?.assignedTo === user.id)
+  ) {
+    return fault;
+  }
+  throw notFound('Fault not found', 'FAULT_NOT_FOUND');
 }
 
-export async function listFaultRecords(database, filters = {}) {
-  return listFaults(database, filters);
+export async function listFaultRecords(database, filters = {}, user) {
+  const scopedFilters = { ...filters };
+  if (user?.role === 'operator') {
+    scopedFilters.reportedBy = user.id;
+    delete scopedFilters.assignedTo;
+  } else if (user?.role === 'technician') {
+    scopedFilters.viewerId = user.id;
+  }
+  return listFaults(database, scopedFilters);
 }
 
 export async function createFault(database, payload, user) {

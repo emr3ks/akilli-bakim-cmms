@@ -171,7 +171,7 @@ export async function getStatusCounts(database) {
   );
   const activeWorkOrders = await get(
     database,
-    "SELECT COUNT(*) AS count FROM work_orders WHERE status NOT IN ('resolved', 'closed')",
+    "SELECT COUNT(*) AS count FROM work_orders WHERE status != 'closed'",
   );
   counts.openFaults = Number(openFaults?.count || 0);
   counts.activeWorkOrders = Number(activeWorkOrders?.count || 0);

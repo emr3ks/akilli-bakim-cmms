@@ -221,13 +221,17 @@ function CompletionModal({
   }, [visible, workOrder?.id]);
 
   const submit = async () => {
-    const durationMinutes = Number(duration);
     if (!interventionNote.trim() || !rootCause.trim()) {
       setError('Müdahale notu ve kök neden açıklaması zorunludur.');
       return;
     }
-    if (!Number.isInteger(durationMinutes) || durationMinutes < 0) {
-      setError('Harcanan süre dakika cinsinden tam sayı olmalıdır.');
+    if (!duration.trim()) {
+      setError('Harcanan süre zorunludur.');
+      return;
+    }
+    const durationMinutes = Number(duration);
+    if (!Number.isInteger(durationMinutes) || durationMinutes < 1) {
+      setError('Harcanan süre 1 dakika veya daha uzun bir tam sayı olmalıdır.');
       return;
     }
     if (!photo) {
@@ -255,7 +259,7 @@ function CompletionModal({
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
-        <View style={styles.modalSheet}>
+        <View style={styles.modalSheet} testID="work-order-completion-modal">
           <View style={styles.modalHeader}>
             <View style={styles.modalHeaderCopy}>
               <Text style={styles.eyebrow}>İŞ EMRİ KAPANIŞI</Text>
@@ -419,6 +423,8 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
         <Text style={styles.description}>{fault.description}</Text>
         {fault.photo ? (
           <Image source={{ uri: fault.photo }} style={styles.faultPhoto} resizeMode="cover" />
+        ) : fault.hasPhoto ? (
+          <Text style={styles.photoMeta}>Fotoğraf eklendi · ayrıntı kaydında görüntülenir</Text>
         ) : null}
         <View style={styles.cardFooter}>
           <Text style={styles.footerText}>{fault.reportedBy.name} · {new Date(fault.createdAt).toLocaleDateString('tr-TR')}</Text>
@@ -470,6 +476,8 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
         ) : null}
         {workOrder.solutionPhoto ? (
           <Image source={{ uri: workOrder.solutionPhoto }} style={styles.faultPhoto} resizeMode="cover" />
+        ) : workOrder.hasSolutionPhoto ? (
+          <Text style={styles.photoMeta}>Çözüm fotoğrafı eklendi</Text>
         ) : null}
         {user.role === 'admin' && workOrder.status === 'open' ? (
           <Button title="Teknisyen ata" onPress={() => setAssignWorkOrder(workOrder)} compact />
@@ -496,7 +504,10 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
     );
   };
 
-  const activeFilterCount = [urgency, assignedTo, section === 'faults' ? faultStatus : workOrderStatus].filter(Boolean).length;
+  const activeStatusFilter = section === 'faults'
+    ? (faultStatus === 'open' ? '' : faultStatus)
+    : workOrderStatus;
+  const activeFilterCount = [urgency, assignedTo, activeStatusFilter].filter(Boolean).length;
 
   return (
     <View style={styles.container} testID="work-orders-screen">
@@ -517,14 +528,16 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
           <Pressable
             accessibilityRole="tab"
             accessibilityState={{ selected: section === 'faults' }}
+            testID="work-orders-section-faults"
             onPress={() => setSection('faults')}
             style={[styles.segment, section === 'faults' && styles.segmentActive]}
           >
-            <Text style={[styles.segmentText, section === 'faults' && styles.segmentTextActive]}>Açık arızalar · {faults.length}</Text>
+            <Text style={[styles.segmentText, section === 'faults' && styles.segmentTextActive]}>Arızalar · {faults.length}</Text>
           </Pressable>
           <Pressable
             accessibilityRole="tab"
             accessibilityState={{ selected: section === 'workOrders' }}
+            testID="work-orders-section-orders"
             onPress={() => setSection('workOrders')}
             style={[styles.segment, section === 'workOrders' && styles.segmentActive]}
           >
@@ -536,7 +549,7 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
           <View style={styles.filterHeader}>
             <Text style={styles.filterLabel}>Aciliyet</Text>
             {activeFilterCount > 0 ? (
-              <Pressable onPress={() => { setUrgency(''); setAssignedTo(''); setFaultStatus(''); setWorkOrderStatus(''); }}>
+              <Pressable onPress={() => { setUrgency(''); setAssignedTo(''); setFaultStatus('open'); setWorkOrderStatus(''); }}>
                 <Text style={styles.clearFilters}>Filtreleri temizle</Text>
               </Pressable>
             ) : null}
@@ -641,6 +654,7 @@ const styles = StyleSheet.create({
   badgeText: { ...typography.caption, fontWeight: '800' },
   description: { ...typography.body, color: colors.inkMuted },
   faultPhoto: { width: '100%', height: 180, borderRadius: radius.md, backgroundColor: colors.neutralSoft },
+  photoMeta: { ...typography.caption, color: colors.primaryDark, backgroundColor: colors.primarySoft, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
   footerText: { ...typography.caption, color: colors.inkMuted },
   workOrderLink: { ...typography.caption, color: colors.primaryDark, fontWeight: '800' },
@@ -652,7 +666,7 @@ const styles = StyleSheet.create({
   actionButton: { flexGrow: 1, minWidth: 140 },
   actionMessage: { ...typography.caption, color: colors.primaryDark, backgroundColor: colors.primarySoft, borderRadius: radius.sm, padding: spacing.md },
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(10, 27, 51, 0.52)' },
-  modalSheet: { maxHeight: '90%', backgroundColor: colors.background, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, overflow: 'hidden', ...shadow },
+  modalSheet: { width: '100%', maxWidth: 720, alignSelf: 'center', maxHeight: '90%', backgroundColor: colors.background, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, overflow: 'hidden', ...shadow },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md, padding: spacing.lg, backgroundColor: colors.surface },
   modalHeaderCopy: { flex: 1, gap: 2 },
   modalTitle: { ...typography.heading, color: colors.ink },

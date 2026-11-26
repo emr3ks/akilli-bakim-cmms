@@ -100,7 +100,9 @@ export function DashboardScreen({ user, onOpenMachine, onOpenInventory, onOpenSc
       <View style={styles.quickActions}>
         <Button title="QR okut" onPress={onOpenScanner} compact style={styles.quickAction} />
         <Button title="Makine envanteri" onPress={onOpenInventory} variant="secondary" compact style={styles.quickAction} />
-        <Button title="Arıza / iş emirleri" onPress={onOpenWorkOrders} variant="danger" compact style={styles.quickAction} />
+        {user.role !== 'operator' ? (
+          <Button title="Arıza / iş emirleri" onPress={onOpenWorkOrders} variant="danger" compact style={styles.quickAction} />
+        ) : null}
       </View>
 
       <View>

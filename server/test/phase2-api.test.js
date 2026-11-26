@@ -2,7 +2,7 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createApp } from '../src/app.js';
-import { closeDatabase, createDatabase } from '../src/db.js';
+import { closeDatabase, createDatabase, run } from '../src/db.js';
 import { seedDemoData } from '../src/seed.js';
 
 const ADMIN = { 'x-user-id': '1' };
@@ -35,6 +35,44 @@ async function createFault(overrides = {}) {
       description: 'Eksen hareketi sırasında ani durma ve titreşim oluştu.',
       ...overrides,
     });
+}
+
+const COMPLETION = {
+  interventionNote: 'Parça değiştirildi ve saha doğrulaması tamamlandı.',
+  rootCause: 'Parça yorulması',
+  durationMinutes: 45,
+  solutionPhotoBase64: PHOTO_BASE64,
+  solutionPhotoMimeType: 'image/png',
+};
+
+async function createAssignedWorkOrder() {
+  const fault = await createFault();
+  const response = await request(app)
+    .post('/api/work-orders')
+    .set(ADMIN)
+    .send({ faultId: fault.body.fault.id, assignedTo: 2 });
+  expect(response.status).toBe(201);
+  return response.body.workOrder.id;
+}
+
+async function advanceWorkOrderToInProgress() {
+  const workOrderId = await createAssignedWorkOrder();
+  const started = await request(app)
+    .patch(`/api/work-orders/${workOrderId}/status`)
+    .set(TECHNICIAN)
+    .send({ status: 'in_progress' });
+  expect(started.status).toBe(200);
+  return workOrderId;
+}
+
+async function advanceWorkOrderToResolved() {
+  const workOrderId = await advanceWorkOrderToInProgress();
+  const resolved = await request(app)
+    .patch(`/api/work-orders/${workOrderId}/status`)
+    .set(TECHNICIAN)
+    .send({ status: 'resolved', ...COMPLETION });
+  expect(resolved.status).toBe(200);
+  return workOrderId;
 }
 
 describe('Phase 2 fault reporting API', () => {
@@ -92,6 +130,17 @@ describe('Phase 2 fault reporting API', () => {
       photoMimeType: 'application/pdf',
     });
     expect(invalidPhoto.status).toBe(400);
+
+    const nonImage = await createFault({
+      photoBase64: 'YQ==',
+      photoMimeType: 'image/png',
+    });
+    expect(nonImage.status).toBe(400);
+
+    const removedAlias = await createFault({
+      photo: 'data:image/svg+xml;base64,PHN2Zy8+',
+    });
+    expect(removedAlias.status).toBe(400);
   });
 
   it('filters faults by open status, urgency, machine, and assigned technician', async () => {
@@ -188,7 +237,7 @@ describe('Phase 2 work-order API', () => {
         status: 'resolved',
         interventionNote: 'Parça değiştirildi.',
         rootCause: 'Rulman yorulması',
-        durationMinutes: -1,
+        durationMinutes: 0,
         solutionPhotoBase64: PHOTO_BASE64,
         solutionPhotoMimeType: 'image/png',
       });
@@ -214,6 +263,13 @@ describe('Phase 2 work-order API', () => {
       solutionPhotoMimeType: 'image/png',
     });
 
+    const faultBeforeClose = await request(app).get(`/api/faults/${faultId}`).set(TECHNICIAN);
+    expect(faultBeforeClose.body.fault.status).toBe('open');
+    const machineBeforeClose = await request(app).get('/api/machines/1').set(TECHNICIAN);
+    expect(machineBeforeClose.body.machine.status).toBe('faulted');
+    const summaryBeforeClose = await request(app).get('/api/dashboard/summary').set(ADMIN);
+    expect(summaryBeforeClose.body).toMatchObject({ openFaults: 5, activeWorkOrders: 5 });
+
     const closed = await request(app)
       .patch(`/api/work-orders/${created.body.workOrder.id}/status`)
       .set(TECHNICIAN)
@@ -227,6 +283,8 @@ describe('Phase 2 work-order API', () => {
 
     const machine = await request(app).get('/api/machines/1').set(TECHNICIAN);
     expect(machine.body.machine.status).toBe('running');
+    const summaryAfterClose = await request(app).get('/api/dashboard/summary').set(ADMIN);
+    expect(summaryAfterClose.body).toMatchObject({ openFaults: 4, activeWorkOrders: 4 });
   });
 
   it('supports canonical fault creation and work-order detail endpoints', async () => {
@@ -313,6 +371,35 @@ describe('Phase 2 work-order API', () => {
     expect(operatorUpdate.status).toBe(403);
   });
 
+  it('enforces role-based fault and work-order visibility', async () => {
+    const adminFault = await request(app)
+      .post('/api/faults')
+      .set(ADMIN)
+      .send({
+        machineId: 1,
+        title: 'Yönetici tarafından kaydedilen kontrol arızası',
+        category: 'other',
+        urgency: 'low',
+        description: 'Bu kayıt operatör sonuçlarında görünmemelidir.',
+      });
+    expect(adminFault.status).toBe(201);
+
+    const operatorFaults = await request(app).get('/api/faults').set(OPERATOR);
+    expect(operatorFaults.status).toBe(200);
+    expect(operatorFaults.body.faults.map((fault) => fault.code)).not.toContain(adminFault.body.fault.code);
+
+    const operatorWorkOrders = await request(app).get('/api/work-orders').set(OPERATOR);
+    expect(operatorWorkOrders.status).toBe(403);
+
+    const technicianWorkOrders = await request(app).get('/api/work-orders').set(TECHNICIAN);
+    expect(technicianWorkOrders.status).toBe(200);
+    expect(technicianWorkOrders.body.workOrders.map((workOrder) => workOrder.code)).not.toContain('IE-2026-001');
+    expect(technicianWorkOrders.body.workOrders.every((workOrder) => workOrder.technicianId === 2)).toBe(true);
+
+    const unassignedDetail = await request(app).get('/api/work-orders/1').set(TECHNICIAN);
+    expect(unassignedDetail.status).toBe(403);
+  });
+
   it('prevents concurrent duplicate work orders for the same fault', async () => {
     const faultResponse = await createFault();
     const faultId = faultResponse.body.fault.id;
@@ -349,6 +436,86 @@ describe('Phase 2 work-order API', () => {
   });
 });
 
+async function workOrderIdByCode(code) {
+  const response = await request(app).get('/api/work-orders').set(ADMIN);
+  const workOrder = response.body.workOrders.find((item) => item.code === code);
+  if (!workOrder) throw new Error(`Seeded work order not found: ${code}`);
+  return workOrder.id;
+}
+
+describe('Phase 2 work-order transition matrix', () => {
+  it.each([
+    ['assigned to in_progress', async () => workOrderIdByCode('IE-2026-002'), 'in_progress', {}],
+    ['in_progress to waiting_parts', async () => workOrderIdByCode('IE-2026-003'), 'waiting_parts', {}],
+    ['waiting_parts to in_progress', async () => workOrderIdByCode('IE-2026-004'), 'in_progress', {}],
+    ['in_progress to resolved', advanceWorkOrderToInProgress, 'resolved', COMPLETION],
+    ['waiting_parts to resolved', async () => workOrderIdByCode('IE-2026-004'), 'resolved', COMPLETION],
+    ['resolved to closed', advanceWorkOrderToResolved, 'closed', {}],
+  ])('allows %s', async (_label, prepare, targetStatus, body) => {
+    const workOrderId = await prepare();
+    const response = await request(app)
+      .patch(`/api/work-orders/${workOrderId}/status`)
+      .set(TECHNICIAN)
+      .send({ status: targetStatus, ...body });
+    expect(response.status).toBe(200);
+    expect(response.body.workOrder.status).toBe(targetStatus);
+  });
+
+  it.each([
+    ['open to in_progress', async () => workOrderIdByCode('IE-2026-001'), 'in_progress'],
+    ['open to resolved', async () => workOrderIdByCode('IE-2026-001'), 'resolved'],
+    ['open to closed', async () => workOrderIdByCode('IE-2026-001'), 'closed'],
+    ['assigned to waiting_parts', async () => workOrderIdByCode('IE-2026-002'), 'waiting_parts'],
+    ['assigned to resolved', async () => workOrderIdByCode('IE-2026-002'), 'resolved'],
+    ['assigned to closed', async () => workOrderIdByCode('IE-2026-002'), 'closed'],
+    ['in_progress to assigned', async () => workOrderIdByCode('IE-2026-003'), 'assigned'],
+    ['in_progress to closed', async () => workOrderIdByCode('IE-2026-003'), 'closed'],
+    ['waiting_parts to assigned', async () => workOrderIdByCode('IE-2026-004'), 'assigned'],
+    ['waiting_parts to closed', async () => workOrderIdByCode('IE-2026-004'), 'closed'],
+    ['resolved to in_progress', advanceWorkOrderToResolved, 'in_progress'],
+    ['resolved to waiting_parts', advanceWorkOrderToResolved, 'waiting_parts'],
+    ['resolved to assigned', advanceWorkOrderToResolved, 'assigned'],
+    ['closed to in_progress', async () => workOrderIdByCode('IE-2026-005'), 'in_progress'],
+    ['closed to waiting_parts', async () => workOrderIdByCode('IE-2026-005'), 'waiting_parts'],
+    ['closed to resolved', async () => workOrderIdByCode('IE-2026-005'), 'resolved'],
+    ['closed to closed', async () => workOrderIdByCode('IE-2026-005'), 'closed'],
+  ])('rejects %s', async (_label, prepare, targetStatus) => {
+    const workOrderId = await prepare();
+    const response = await request(app)
+      .patch(`/api/work-orders/${workOrderId}/status`)
+      .set(TECHNICIAN)
+      .send({ status: targetStatus, ...(targetStatus === 'resolved' ? COMPLETION : {}) });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('INVALID_STATUS_TRANSITION');
+  });
+
+  it('prevents a different technician from updating an assigned work order', async () => {
+    await run(
+      database,
+      "INSERT INTO users (id, name, email, role, initials) VALUES (4, 'Başka Teknisyen', 'other.tech@example.com', 'technician', 'BT')",
+    );
+    const otherTechnician = { 'x-user-id': '4' };
+    const workOrderId = await workOrderIdByCode('IE-2026-002');
+
+    const response = await request(app)
+      .patch(`/api/work-orders/${workOrderId}/status`)
+      .set(otherTechnician)
+      .send({ status: 'in_progress' });
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('allows the manager to progress any work order', async () => {
+    const workOrderId = await workOrderIdByCode('IE-2026-002');
+    const response = await request(app)
+      .patch(`/api/work-orders/${workOrderId}/status`)
+      .set(ADMIN)
+      .send({ status: 'in_progress' });
+    expect(response.status).toBe(200);
+    expect(response.body.workOrder.status).toBe('in_progress');
+  });
+});
+
 describe('Phase 2 demo dataset', () => {
   it('seeds at least four realistic fault and work-order records across stages', async () => {
     const faults = await request(app).get('/api/faults').set(ADMIN);
@@ -361,6 +528,8 @@ describe('Phase 2 demo dataset', () => {
     expect(new Set(workOrders.body.workOrders.map((workOrder) => workOrder.status))).toEqual(
       new Set(['open', 'assigned', 'in_progress', 'waiting_parts', 'closed']),
     );
+    const photoFault = faults.body.faults.find((fault) => fault.code === 'ARZ-2026-005');
+    expect(photoFault).toMatchObject({ hasPhoto: true, photo: null, photoBase64: null });
 
     const originalCodes = faults.body.faults.map((fault) => fault.code);
     await seedDemoData(database);

@@ -23,6 +23,14 @@
           "cameraPermission": "Makine QR kodlarını okumak için kamera erişimine izin verin."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Arıza ve çözüm fotoğraflarını seçmek için fotoğraf erişimine izin verin.",
+          "cameraPermission": "Arıza ve çözüm fotoğraflarını çekmek için kamera erişimine izin verin.",
+          "microphonePermission": false
+        }
+      ],
       "expo-status-bar",
       "expo-sharing"
     ]

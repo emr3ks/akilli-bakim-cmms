@@ -33,9 +33,9 @@ const FAULT_SELECT = `
 function mapPhoto(value) {
   if (!value) return { photo: null, photoBase64: null, photoMimeType: null };
   const match = /^data:([^;]+);base64,(.+)$/.exec(value);
-  if (!match) return { photo: value, photoBase64: null, photoMimeType: null };
+  if (!match) return { photo: null, photoBase64: null, photoMimeType: null };
   return {
-    photo: value,
+    photo: null,
     photoBase64: match[2],
     photoMimeType: match[1],
   };
@@ -60,6 +60,7 @@ export function mapFault(row) {
     urgency: row.urgency,
     description: row.description,
     ...photo,
+    hasPhoto: Boolean(row.has_photo ?? row.photo_data),
     status: row.status,
     reportedBy: {
       id: row.reported_by,
@@ -101,6 +102,14 @@ export async function listFaults(database, filters = {}) {
     clauses.push('f.machine_id = ?');
     params.push(filters.machineId);
   }
+  if (filters.reportedBy) {
+    clauses.push('f.reported_by = ?');
+    params.push(filters.reportedBy);
+  }
+  if (filters.viewerId) {
+    clauses.push('(f.reported_by = ? OR w.assigned_to = ?)');
+    params.push(filters.viewerId, filters.viewerId);
+  }
   if (filters.q) {
     const search = `%${filters.q}%`;
     clauses.push(`(
@@ -113,9 +122,13 @@ export async function listFaults(database, filters = {}) {
   }
 
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const listSelect = FAULT_SELECT.replace(
+    '    f.photo_data,',
+    "    NULL AS photo_data,\n    f.photo_data IS NOT NULL AS has_photo,",
+  );
   const rows = await all(
     database,
-    `${FAULT_SELECT}
+    `${listSelect}
      ${where}
      ORDER BY
        CASE f.urgency
@@ -125,7 +138,8 @@ export async function listFaults(database, filters = {}) {
          ELSE 4
        END ASC,
        f.created_at DESC,
-       f.id DESC`,
+       f.id DESC
+     LIMIT 100`,
     params,
   );
   return rows.map(mapFault);

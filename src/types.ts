@@ -97,6 +97,7 @@ export interface Fault {
   photo: string | null;
   photoBase64: string | null;
   photoMimeType: string | null;
+  hasPhoto: boolean;
   status: FaultStatus;
   reportedBy: {
     id: number;
@@ -142,6 +143,7 @@ export interface FaultSummary {
   photo: string | null;
   photoBase64: string | null;
   photoMimeType: string | null;
+  hasPhoto: boolean;
   status: FaultStatus;
 }
 
@@ -165,6 +167,7 @@ export interface WorkOrder {
   solutionPhoto: string | null;
   solutionPhotoBase64: string | null;
   solutionPhotoMimeType: string | null;
+  hasSolutionPhoto: boolean;
   createdBy: number;
   createdByUser: {
     id: number;

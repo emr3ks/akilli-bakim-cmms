@@ -159,7 +159,7 @@ export function FaultReportModal({ visible, machine, user, onClose, onReported }
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(10, 27, 51, 0.52)' },
-  sheet: { maxHeight: '94%', minHeight: '72%', backgroundColor: colors.background, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, overflow: 'hidden', ...shadow },
+  sheet: { width: '100%', maxWidth: 720, alignSelf: 'center', maxHeight: '94%', minHeight: '72%', backgroundColor: colors.background, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, overflow: 'hidden', ...shadow },
   handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong, alignSelf: 'center', marginTop: spacing.sm },
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md, padding: spacing.lg, paddingBottom: spacing.md, backgroundColor: colors.surface },
   headerCopy: { flex: 1, gap: 2 },

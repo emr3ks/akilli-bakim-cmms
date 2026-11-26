@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "build": "expo export --platform web --output-dir dist",
-    "capture:ui": "node scripts/capture-ui.mjs",
+    "capture:ui": "npm run demo && node scripts/capture-ui.mjs",
     "check": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "engines": {

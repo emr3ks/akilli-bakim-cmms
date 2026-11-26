@@ -122,13 +122,13 @@ export function createApp(options = {}) {
 
   api.get('/faults', asyncHandler(async (request, response) => {
     const filters = validateFaultFilters(request.query);
-    const faults = await listFaultRecords(request.db, filters);
+    const faults = await listFaultRecords(request.db, filters, request.user);
     response.json({ faults });
   }));
 
   api.get('/faults/:id', asyncHandler(async (request, response) => {
     const faultId = parsePositiveId(request.params.id, 'Fault id');
-    const fault = await getFaultOrThrow(request.db, faultId);
+    const fault = await getFaultOrThrow(request.db, faultId, request.user);
     response.json({ fault });
   }));
 
@@ -149,13 +149,13 @@ export function createApp(options = {}) {
 
   api.get('/work-orders', asyncHandler(async (request, response) => {
     const filters = validateWorkOrderFilters(request.query);
-    const workOrders = await listManagedWorkOrders(request.db, filters);
+    const workOrders = await listManagedWorkOrders(request.db, filters, request.user);
     response.json({ workOrders });
   }));
 
   api.get('/work-orders/:id', asyncHandler(async (request, response) => {
     const workOrderId = parsePositiveId(request.params.id, 'Work order id');
-    const workOrder = await getWorkOrderOrThrow(request.db, workOrderId);
+    const workOrder = await getWorkOrderOrThrow(request.db, workOrderId, request.user);
     response.json({ workOrder });
   }));
 

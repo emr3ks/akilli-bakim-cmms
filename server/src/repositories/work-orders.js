@@ -43,9 +43,9 @@ const WORK_ORDER_SELECT = `
 function mapPhoto(value) {
   if (!value) return { photo: null, photoBase64: null, photoMimeType: null };
   const match = /^data:([^;]+);base64,(.+)$/.exec(value);
-  if (!match) return { photo: value, photoBase64: null, photoMimeType: null };
+  if (!match) return { photo: null, photoBase64: null, photoMimeType: null };
   return {
-    photo: value,
+    photo: null,
     photoBase64: match[2],
     photoMimeType: match[1],
   };
@@ -67,6 +67,7 @@ export function mapWorkOrder(row) {
       urgency: row.fault_urgency,
       description: row.fault_description,
       ...faultPhoto,
+      hasPhoto: Boolean(row.has_fault_photo ?? row.fault_photo),
       status: row.fault_status,
     },
     machine: {
@@ -92,6 +93,7 @@ export function mapWorkOrder(row) {
     solutionPhoto: solutionPhoto.photo,
     solutionPhotoBase64: solutionPhoto.photoBase64,
     solutionPhotoMimeType: solutionPhoto.photoMimeType,
+    hasSolutionPhoto: Boolean(row.has_solution_photo ?? row.solution_photo_data),
     createdBy: row.created_by,
     createdByUser: {
       id: row.created_by,
@@ -132,9 +134,18 @@ export async function listWorkOrders(database, filters = {}) {
   }
 
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const listSelect = WORK_ORDER_SELECT
+    .replace(
+      '    w.solution_photo_data,',
+      "    NULL AS solution_photo_data,\n    w.solution_photo_data IS NOT NULL AS has_solution_photo,",
+    )
+    .replace(
+      '    f.photo_data AS fault_photo,',
+      "    NULL AS fault_photo,\n    f.photo_data IS NOT NULL AS has_fault_photo,",
+    );
   const rows = await all(
     database,
-    `${WORK_ORDER_SELECT}
+    `${listSelect}
      ${where}
      ORDER BY
        CASE w.status
@@ -146,7 +157,8 @@ export async function listWorkOrders(database, filters = {}) {
          ELSE 6
        END ASC,
        w.created_at DESC,
-       w.id DESC`,
+       w.id DESC
+     LIMIT 100`,
     params,
   );
   return rows.map(mapWorkOrder);

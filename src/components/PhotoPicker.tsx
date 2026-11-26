@@ -36,6 +36,60 @@ function toSelection(asset: ImagePicker.ImagePickerAsset): SelectedPhoto | null 
   };
 }
 
+const WEB_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+function openWebFilePicker(
+  source: 'camera' | 'library',
+  onSelected: (photo: SelectedPhoto) => void,
+  onError: (message: string) => void,
+) {
+  if (typeof document === 'undefined') {
+    onError('Web dosya seçici başlatılamadı.');
+    return;
+  }
+
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = WEB_MIME_TYPES.join(',');
+  input.dataset.testid = 'cmms-photo-file-input';
+  input.style.display = 'none';
+  if (source === 'camera') input.setAttribute('capture', 'environment');
+  document.body.appendChild(input);
+
+  input.addEventListener('change', () => {
+    const file = input.files?.[0];
+    input.remove();
+    if (!file) return;
+    if (!WEB_MIME_TYPES.includes(file.type)) {
+      onError('Yalnızca JPEG, PNG veya WebP görseller seçilebilir.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      onError('Fotoğraf 2 MB sınırından büyük. Lütfen daha küçük bir görsel seçin.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => onError('Görsel verisi okunamadı.');
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const base64 = result.includes(',') ? result.split(',')[1] : '';
+      if (!base64) {
+        onError('Görsel verisi okunamadı.');
+        return;
+      }
+      onSelected({
+        uri: URL.createObjectURL(file),
+        base64,
+        mimeType: file.type,
+      });
+    };
+    reader.readAsDataURL(file);
+  }, { once: true });
+
+  input.click();
+}
+
 export function PhotoPicker({ value, onChange, label = 'Fotoğraf / görsel', disabled = false }: PhotoPickerProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -44,7 +98,19 @@ export function PhotoPicker({ value, onChange, label = 'Fotoğraf / görsel', di
     setError(null);
     setLoading(true);
     try {
-      if (source === 'camera' && Platform.OS !== 'web') {
+      if (Platform.OS === 'web') {
+        openWebFilePicker(
+          source,
+          (selection) => {
+            setError(null);
+            onChange(selection);
+          },
+          setError,
+        );
+        return;
+      }
+
+      if (source === 'camera') {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (!permission.granted) {
           setError('Fotoğraf için kamera izni verilmedi.');
@@ -55,7 +121,7 @@ export function PhotoPicker({ value, onChange, label = 'Fotoğraf / görsel', di
       const options: ImagePicker.ImagePickerOptions = {
         mediaTypes: ['images'],
         allowsEditing: true,
-        quality: 0.7,
+        quality: 0.6,
         base64: true,
       };
       const result = source === 'camera'
@@ -73,7 +139,7 @@ export function PhotoPicker({ value, onChange, label = 'Fotoğraf / görsel', di
         setError('Görsel verisi okunamadı. Lütfen başka bir fotoğraf seçin.');
         return;
       }
-      if (selection.base64.length > 3_000_000) {
+      if (selection.base64.length > 2_800_000) {
         setError('Fotoğraf çok büyük. Lütfen daha düşük çözünürlüklü bir görsel seçin.');
         return;
       }

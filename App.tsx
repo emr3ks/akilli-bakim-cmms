@@ -148,7 +148,7 @@ export default function App() {
           {!selectedMachine ? (
             <View style={styles.bottomNav}>
               <View style={styles.navInner}>
-                {tabs.map((item) => {
+                {tabs.filter((item) => user.role !== 'operator' || item.key !== 'workorders').map((item) => {
                   const active = tab === item.key;
                   return (
                     <Pressable

@@ -15,6 +15,7 @@ Faz 1 ve Faz 2 kapsamında Expo tabanlı iOS/Android/Web arayüzü, Express REST
 - **Bakım ve arıza kayıtları:** Rol yetkilerine göre bakım planı ve arıza bildirimi; yeni arıza makine durumunu günceller.
 - **Fotoğraflı hızlı arıza bildirimi:** Makine kartından veya QR ile bulunan makineden başlık, kategori, aciliyet, açıklama ve fotoğrafla `ARZ-YYYY-NNN` kaydı oluşturur.
 - **İş emri yönetimi:** Bakım yöneticisi arızayı `IE-YYYY-NNN` iş emrine dönüştürür, teknisyene atar; teknisyen durum akışını ve çözüm kanıtını yönetir.
+- **Rol kapsamlı yönetim:** Yönetici tüm kayıtları görür, teknisyen yalnızca kendi iş emirlerini, operatör yalnızca kendi arıza bildirimlerini görür.
 - **Arıza ve iş emri filtreleme:** Açık durum, aciliyet ve atanan teknisyene göre anlık filtreleme.
 - **Faz 2 dashboard sayaçları:** Açık arıza ve aktif iş emri sayıları ana özet panelinde gösterilir.
 - **Demo verileri:** Gerçekçi endüstriyel makineler, 3 farklı rolde kullanıcı ve farklı aşamalarda en az 4 arıza/iş emri kaydı.
@@ -26,7 +27,7 @@ Faz 1 ve Faz 2 kapsamında Expo tabanlı iOS/Android/Web arayüzü, Express REST
 - Node.js / Express REST API
 - SQLite (`sqlite3`)
 - Vitest + Supertest
-- Expo Camera, Expo Print ve React Native QR Code SVG
+- Expo Camera, Expo Image Picker, Expo Print ve React Native QR Code SVG
 
 ## Gereksinimler
 
@@ -118,12 +119,12 @@ Tüm makine yazma işlemleri `x-user-id` başlığındaki kullanıcı kimliği i
 | `GET` | `/api/auth/demo-users` | Herkese açık |
 | `POST` | `/api/auth/login` | Herkese açık |
 | `GET` | `/api/dashboard/summary` | Oturum açmış kullanıcı; açık arıza ve aktif iş emri sayaçlarını destekler |
-| `GET` | `/api/faults` | Oturum açmış kullanıcı; `status`, `urgency`, `assignedTo` ve `machineId` filtrelerini destekler |
-| `GET` | `/api/faults/:id` | Oturum açmış kullanıcı |
+| `GET` | `/api/faults` | Rol kapsamlı: yönetici tümü, teknisyen ilgili kayıtlar, operatör kendi bildirimleri; `status`, `urgency`, `assignedTo` ve `machineId` filtrelerini destekler |
+| `GET` | `/api/faults/:id` | Görüntülenebilen arıza kaydı |
 | `POST` | `/api/faults` | Tüm roller; fotoğraflı arıza bildirimi oluşturur |
 | `POST` | `/api/machines/:id/faults` | Tüm roller; makine bağlı fotoğraflı arıza bildirimi oluşturur |
-| `GET` | `/api/work-orders` | Oturum açmış kullanıcı; durum, aciliyet, teknisyen ve makime göre filtreler |
-| `GET` | `/api/work-orders/:id` | Oturum açmış kullanıcı |
+| `GET` | `/api/work-orders` | Yönetici tümü, teknisyen yalnızca kendi atamaları; durum, aciliyet, teknisyen ve makime göre filtreler |
+| `GET` | `/api/work-orders/:id` | Yönetici veya atanmış teknisyen |
 | `POST` | `/api/work-orders` | Yönetici; arızadan iş emri oluşturur ve teknisyene atayabilir |
 | `POST` | `/api/work-orders/:id/assign` | Yönetici; açık iş emrine teknisyen atar |
 | `PATCH` | `/api/work-orders/:id/status` | Atanmış teknisyen/yönetici; durum geçişi ve çözüm kanıtı |
@@ -135,6 +136,8 @@ Tüm makine yazma işlemleri `x-user-id` başlığındaki kullanıcı kimliği i
 | `DELETE` | `/api/machines/:id` | Yönetici |
 | `GET/POST` | `/api/machines/:id/maintenance-records` | Okuma: herkese açık; yazma: yönetici/teknisyen |
 | `GET/POST` | `/api/machines/:id/fault-records` | Okuma: herkese açık; yazma: tüm roller |
+
+Fotoğraflar `photoBase64` + `photoMimeType` (arıza) ve `solutionPhotoBase64` + `solutionPhotoMimeType` (çözüm) alanlarıyla gönderilir. API JPEG, PNG ve WebP imaj magic byte'larını ve en fazla 2 MB çözülmüş boyutu doğrular.
 
 Hatalar `{ "error": { "message": "...", "code": "..." } }` biçiminde döner. Yetkisiz istekler `401`, yetki dışı istekler `403`, doğrulama hataları `400` durum koduyla sonuçlanır.
 
@@ -149,14 +152,17 @@ Gerçek Expo Web uygulaması Edge üzerinde `390×844` mobil ve `1440×900` masa
 - [Öncesi mobil dashboard](docs/screenshots/before-mobile-dashboard.png) / [Sonrası mobil dashboard](docs/screenshots/after-mobile-dashboard.png)
 - [Öncesi mobil makine kartı](docs/screenshots/before-mobile-machine-detail.png) / [Sonrası mobil makine kartı](docs/screenshots/after-mobile-machine-detail.png)
 - [Öncesi masaüstü dashboard](docs/screenshots/before-desktop-dashboard.png) / [Sonrası masaüstü dashboard](docs/screenshots/after-desktop-dashboard.png)
-- [Mobil arıza ve iş emri ekranı](docs/screenshots/after-mobile-work-orders.png)
-- [Mobil fotoğraflı arıza bildirimi](docs/screenshots/after-mobile-fault-report.png)
-- [Masaüstü arıza ve iş emri ekranı](docs/screenshots/after-desktop-work-orders.png)
+- [Mobil iş emri yönetim ekranı](docs/screenshots/after-mobile-work-orders.png)
+- [Mobil fotoğraflı arıza bildirimi ve önizleme](docs/screenshots/after-mobile-fault-report.png)
+- [Gönderilen arıza doğrulaması](docs/screenshots/after-mobile-fault-reported.png)
+- [Makine detayındaki Faz 2 arıza geçmişi](docs/screenshots/after-mobile-fault-history.png)
+- [Teknisyen iş emri kapatma akışı](docs/screenshots/after-mobile-work-order-closure.png)
+- [Masaüstü iş emri yönetim ekranı](docs/screenshots/after-desktop-work-orders.png)
 - [Mobil giriş](docs/screenshots/after-mobile-login.png)
 - [Mobil envanter](docs/screenshots/after-mobile-inventory.png)
 - [Mobil QR okutma](docs/screenshots/after-mobile-scanner.png)
 
-`npm run capture:ui` komutu bu akışları yeniden çalıştırır; API ve Expo sunucularının çalışıyor olması gerekir.
+`npm run capture:ui` komutu bu akışları yeniden çalıştırır; API ve Expo sunucularının çalışıyor olması gerekir. Betik, gerçek bir PNG dosyası seçip arıza bildirimini gönderir; teknisyen iş emrini müdahale/parça/çözüldü/kapatıldı durumları boyunca ilerletir ve yatay taşma ile tarayıcı hatalarını denetler.
 
 ## Proje yapısı
 
