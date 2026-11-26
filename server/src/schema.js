@@ -24,6 +24,15 @@ CREATE TABLE IF NOT EXISTS machines (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS maintenance_runtime_readings (
+  machine_id INTEGER PRIMARY KEY,
+  runtime_hours REAL NOT NULL CHECK (runtime_hours >= 0),
+  reported_at TEXT NOT NULL,
+  reported_by INTEGER,
+  FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+  FOREIGN KEY (reported_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS maintenance_records (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   machine_id INTEGER NOT NULL,
@@ -115,6 +124,16 @@ CREATE TABLE IF NOT EXISTS maintenance_executions (
   next_due_runtime_hours REAL,
   FOREIGN KEY (plan_id) REFERENCES maintenance_plans(id) ON DELETE CASCADE,
   FOREIGN KEY (completed_by) REFERENCES users(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS maintenance_occurrence_keys (
+  plan_id INTEGER NOT NULL,
+  occurrence_key TEXT NOT NULL,
+  execution_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (plan_id, occurrence_key),
+  FOREIGN KEY (plan_id) REFERENCES maintenance_plans(id) ON DELETE CASCADE,
+  FOREIGN KEY (execution_id) REFERENCES maintenance_executions(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS maintenance_execution_items (

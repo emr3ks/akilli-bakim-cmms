@@ -120,9 +120,19 @@ function formatDateTime(value: string): string {
 }
 
 function defaultDueDate(): string {
-  const date = new Date();
-  date.setDate(date.getDate() + 7);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Istanbul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const date = new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day) + 7));
   return date.toISOString().slice(0, 10);
+}
+
+function createOccurrenceKey(): string {
+  return `occ-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 function PlanFormModal({
@@ -154,12 +164,15 @@ function PlanFormModal({
   useEffect(() => {
     if (!visible) return;
     setName('');
-    setMachineId(machines[0] ? String(machines[0].id) : '');
+    const initialMachine = machines[0];
+    setMachineId(initialMachine ? String(initialMachine.id) : '');
+    setRuntimeHours(initialMachine?.currentRuntimeHours === null || initialMachine?.currentRuntimeHours === undefined
+      ? '0'
+      : String(initialMachine.currentRuntimeHours));
     setFrequency('monthly');
     setAssignedTo(technicians[0] ? String(technicians[0].id) : '');
     setNextDueDate(defaultDueDate());
     setIntervalHours('500');
-    setRuntimeHours('0');
     setChecklist([{ title: '', measurementLabel: '' }]);
     setError(null);
   }, [machines, technicians, visible]);
@@ -172,6 +185,31 @@ function PlanFormModal({
     value: String(technician.id),
     label: technician.name,
   })), [technicians]);
+  const selectedMachine = useMemo(
+    () => machines.find((machine) => String(machine.id) === machineId),
+    [machineId, machines],
+  );
+
+  const selectMachine = (value: string) => {
+    setMachineId(value);
+    const machine = machines.find((candidate) => String(candidate.id) === value);
+    setRuntimeHours(
+      machine?.currentRuntimeHours === null || machine?.currentRuntimeHours === undefined
+        ? '0'
+        : String(machine.currentRuntimeHours),
+    );
+  };
+
+  const selectFrequency = (value: PreventiveFrequency) => {
+    setFrequency(value);
+    if (value === 'working_hours' && selectedMachine) {
+      setRuntimeHours(
+        selectedMachine.currentRuntimeHours === null || selectedMachine.currentRuntimeHours === undefined
+          ? '0'
+          : String(selectedMachine.currentRuntimeHours),
+      );
+    }
+  };
 
   const updateChecklistItem = (index: number, field: keyof ChecklistDraft, value: string) => {
     setChecklist((current) => current.map((item, itemIndex) => (
@@ -201,8 +239,8 @@ function PlanFormModal({
     }
     const interval = Number(intervalHours);
     const runtime = Number(runtimeHours);
-    if (frequency === 'working_hours' && (!Number.isInteger(interval) || interval < 1
-      || !Number.isInteger(runtime) || runtime < 0)) {
+    if (frequency === 'working_hours' && (!Number.isFinite(interval) || interval <= 0
+      || !Number.isFinite(runtime) || runtime < 0)) {
       setError('Çalışma saati planı için geçerli aralık ve mevcut saat girin.');
       return;
     }
@@ -253,13 +291,13 @@ function PlanFormModal({
             <OptionPicker
               label="Makine"
               value={machineId}
-              onChange={setMachineId}
+              onChange={selectMachine}
               options={machineOptions}
             />
             <OptionPicker
               label="Periyot tipi"
               value={frequency}
-              onChange={setFrequency}
+              onChange={selectFrequency}
               options={frequencyOptions}
             />
             <OptionPicker
@@ -361,6 +399,7 @@ function CompletionModal({
 }) {
   const [results, setResults] = useState<Record<number, ResultDraft>>({});
   const [notes, setNotes] = useState('');
+  const [occurrenceKey, setOccurrenceKey] = useState('');
   const [runtimeHours, setRuntimeHours] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -373,10 +412,9 @@ function CompletionModal({
     }
     setResults(initial);
     setNotes('');
+    setOccurrenceKey(createOccurrenceKey());
     setRuntimeHours(
-      plan.nextDueRuntimeHours !== null && plan.intervalHours !== null
-        ? String(Math.max(0, plan.nextDueRuntimeHours - plan.intervalHours))
-        : '',
+      plan.currentRuntimeHours !== null ? String(plan.currentRuntimeHours) : '',
     );
     setError(null);
   }, [plan, visible]);
@@ -408,8 +446,12 @@ function CompletionModal({
       return;
     }
     const runtime = Number(runtimeHours);
-    if (plan.frequency === 'working_hours' && (!Number.isInteger(runtime) || runtime < 0)) {
-      setError('Güncel çalışma saati girilmelidir.');
+    if (plan.frequency === 'working_hours' && (
+      !runtimeHours.trim()
+      || !Number.isFinite(runtime)
+      || runtime <= 0
+    )) {
+      setError('Güncel çalışma saati 0’dan büyük bir sayı olarak girilmelidir.');
       return;
     }
 
@@ -417,6 +459,7 @@ function CompletionModal({
     setError(null);
     try {
       await onSubmit({
+        occurrenceKey,
         checklistResults: plan.checklistItems.map((item) => ({
           itemId: item.id,
           completed: true,
@@ -549,7 +592,7 @@ function HistoryModal({
                 {completion.results.map((result) => (
                   <View key={result.itemId} style={styles.historyResult}>
                     <Text style={styles.historyResultTitle}>✓ {result.title}</Text>
-                    {result.measurementValue ? (
+                    {result.measurementValue !== null ? (
                       <Text style={styles.historyResultMeta}>Ölçüm: {result.measurementValue}</Text>
                     ) : null}
                     {result.note ? <Text style={styles.historyResultMeta}>{result.note}</Text> : null}
@@ -565,6 +608,78 @@ function HistoryModal({
   );
 }
 
+function RuntimeModal({
+  plan,
+  visible,
+  onClose,
+  onSubmit,
+}: {
+  plan: PreventivePlan | null;
+  visible: boolean;
+  onClose: () => void;
+  onSubmit: (runtimeHours: number) => Promise<void>;
+}) {
+  const [runtimeHours, setRuntimeHours] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!visible || !plan) return;
+    setRuntimeHours(plan.currentRuntimeHours === null ? '' : String(plan.currentRuntimeHours));
+    setError(null);
+  }, [plan, visible]);
+
+  const submit = async () => {
+    const runtime = Number(runtimeHours);
+    if (!runtimeHours.trim() || !Number.isFinite(runtime) || runtime < 0) {
+      setError('Güncel çalışma saati 0 veya daha büyük bir sayı olmalıdır.');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onSubmit(runtime);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Çalışma saati kaydedilemedi.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+        <View style={styles.modalSheet} testID="preventive-runtime-modal">
+          <View style={styles.modalHeader}>
+            <View style={styles.modalHeaderCopy}>
+              <Text style={styles.eyebrow}>ÇALIŞMA SAATİ</Text>
+              <Text style={styles.modalTitle}>{plan?.code ?? ''}</Text>
+              <Text style={styles.modalSubtitle}>Makinin güncel toplam çalışma saatini kaydedin.</Text>
+            </View>
+            <Button title="Kapat" onPress={onClose} variant="ghost" compact />
+          </View>
+          <View style={styles.modalBody}>
+            <FormField
+              label="Güncel toplam çalışma saati"
+              value={runtimeHours}
+              onChangeText={setRuntimeHours}
+              placeholder="Örn. 1280"
+              keyboardType="decimal-pad"
+            />
+            {plan ? (
+              <Text style={styles.runtimeThresholdText}>
+                Bakım eşiği: {plan.nextDueRuntimeHours ?? '—'} saat
+              </Text>
+            ) : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <Button title="Çalışma saatini kaydet" onPress={() => void submit()} loading={submitting} />
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 export function PreventiveScreen({ user }: PreventiveScreenProps) {
   const [plans, setPlans] = useState<PreventivePlan[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
@@ -576,6 +691,7 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [createVisible, setCreateVisible] = useState(false);
   const [completingPlan, setCompletingPlan] = useState<PreventivePlan | null>(null);
+  const [runtimePlan, setRuntimePlan] = useState<PreventivePlan | null>(null);
   const [historyPlan, setHistoryPlan] = useState<PreventivePlan | null>(null);
   const [historyCompletions, setHistoryCompletions] = useState<PreventiveCompletion[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -621,6 +737,14 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
     const response = await api.completePreventivePlan(user.id, completingPlan.id, payload);
     setCompletingPlan(null);
     setActionMessage(`${response.plan.code} tamamlandı; sonraki bakım ${formatDate(response.plan.nextDueDate)} tarihine planlandı.`);
+    await load(true);
+  };
+
+  const reportRuntime = async (runtimeHours: number) => {
+    if (!runtimePlan) return;
+    await api.reportPreventiveRuntime(user.id, runtimePlan.id, runtimeHours);
+    setRuntimePlan(null);
+    setActionMessage(`${runtimePlan.code} için güncel çalışma saati kaydedildi.`);
     await load(true);
   };
 
@@ -671,7 +795,7 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
         </View>
         {plan.frequency === 'working_hours' ? (
           <Text style={styles.runtimeText}>
-            Çalışma saati eşiği: {plan.nextDueRuntimeHours ?? '—'} saat
+            Güncel: {plan.currentRuntimeHours ?? '—'} saat · Bakım eşiği: {plan.nextDueRuntimeHours ?? '—'} saat
             {plan.intervalHours ? ` · ${plan.intervalHours} saatlik aralık` : ''}
           </Text>
         ) : null}
@@ -686,6 +810,15 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
             <Button
               title="Kontrol listesini uygula"
               onPress={() => setCompletingPlan(plan)}
+              compact
+              style={styles.planAction}
+            />
+          ) : null}
+          {plan.frequency === 'working_hours' && canComplete ? (
+            <Button
+              title="Çalışma saatini güncelle"
+              onPress={() => setRuntimePlan(plan)}
+              variant="secondary"
               compact
               style={styles.planAction}
             />
@@ -759,6 +892,12 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
         onClose={() => setCompletingPlan(null)}
         onSubmit={completePlan}
       />
+      <RuntimeModal
+        plan={runtimePlan}
+        visible={Boolean(runtimePlan)}
+        onClose={() => setRuntimePlan(null)}
+        onSubmit={reportRuntime}
+      />
       <HistoryModal
         plan={historyPlan}
         completions={historyCompletions}
@@ -796,6 +935,7 @@ const styles = StyleSheet.create({
   planMetaLabel: { ...typography.caption, color: colors.inkMuted },
   planMetaValue: { ...typography.label, color: colors.ink },
   runtimeText: { ...typography.caption, color: colors.primaryDark, backgroundColor: colors.primarySoft, borderRadius: radius.sm, padding: spacing.sm },
+  runtimeThresholdText: { ...typography.caption, color: colors.inkMuted, textAlign: 'center' },
   planFooter: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   planFooterText: { ...typography.caption, color: colors.inkMuted },
   planActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },

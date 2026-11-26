@@ -35,6 +35,7 @@ import {
   getPreventivePlanOrThrow,
   listManagedPreventivePlans,
   listPreventiveCompletions,
+  reportPreventiveRuntime,
 } from './services/preventive-plan-service.js';
 import {
   validateFaultFilters,
@@ -127,7 +128,12 @@ export function createApp(options = {}) {
 
   api.get('/dashboard/summary', asyncHandler(async (request, response) => {
     const counts = await getStatusCounts(request.db);
-    Object.assign(counts, await getPreventiveDueCounts(request.db));
+    Object.assign(
+      counts,
+      await getPreventiveDueCounts(request.db, {
+        assignedTo: request.user.role === 'admin' ? null : request.user.id,
+      }),
+    );
     response.json(counts);
   }));
 
@@ -219,6 +225,21 @@ export function createApp(options = {}) {
     const plan = await getPreventivePlanOrThrow(request.db, planId, request.user);
     response.json({ plan });
   }));
+
+  api.post(
+    '/preventive-plans/:id/runtime',
+    requireRole('admin', 'technician'),
+    asyncHandler(async (request, response) => {
+      const planId = parsePositiveId(request.params.id, 'Preventive plan id');
+      const plan = await reportPreventiveRuntime(
+        request.db,
+        planId,
+        request.body,
+        request.user,
+      );
+      response.json({ plan });
+    }),
+  );
 
   api.post('/preventive-plans', requireRole('admin'), asyncHandler(async (request, response) => {
     const plan = await createPreventivePlan(request.db, request.body, request.user);

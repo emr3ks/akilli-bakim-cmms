@@ -1,5 +1,5 @@
 import { all, get, run } from '../db.js';
-import { addUtcDays, dueStateForDate, todayUtcDate } from '../utils/date-only.js';
+import { addUtcDays, dueStateForDate, todayPlantDate } from '../utils/date-only.js';
 
 const PLAN_SELECT = `
   SELECT
@@ -16,6 +16,7 @@ const PLAN_SELECT = `
     p.created_by,
     p.created_at,
     p.updated_at,
+    runtime.runtime_hours AS current_runtime_hours,
     m.code AS machine_code,
     m.name AS machine_name,
     m.line AS machine_line,
@@ -25,6 +26,7 @@ const PLAN_SELECT = `
   FROM maintenance_plans p
   JOIN machines m ON m.id = p.machine_id
   LEFT JOIN users technician ON technician.id = p.assigned_to
+  LEFT JOIN maintenance_runtime_readings runtime ON runtime.machine_id = p.machine_id
 `;
 
 const EXECUTION_SELECT = `
@@ -93,9 +95,14 @@ export function mapPreventivePlan(row, checklistItems = []) {
       : null,
     nextDueDate: row.next_due_date,
     nextDueRuntimeHours: row.next_due_runtime_hours ?? null,
+    currentRuntimeHours: row.current_runtime_hours ?? null,
     intervalHours: row.interval_hours ?? null,
     checklistItems,
-    dueState: dueStateForDate(row.next_due_date),
+    dueState: dueStateForDate(row.next_due_date, {
+      frequency: row.frequency,
+      nextDueRuntimeHours: row.next_due_runtime_hours ?? null,
+      currentRuntimeHours: row.current_runtime_hours ?? null,
+    }),
     lastCompletedAt: row.last_completed_at ?? null,
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -210,6 +217,49 @@ export async function insertPreventivePlan(database, data) {
   return result.lastID;
 }
 
+export async function findMachineRuntime(database, machineId) {
+  const row = await get(
+    database,
+    `SELECT machine_id, runtime_hours, reported_at, reported_by
+     FROM maintenance_runtime_readings
+     WHERE machine_id = ?`,
+    [machineId],
+  );
+  return row
+    ? {
+        machineId: row.machine_id,
+        runtimeHours: row.runtime_hours,
+        reportedAt: row.reported_at,
+        reportedById: row.reported_by ?? null,
+      }
+    : null;
+}
+
+export async function upsertMachineRuntime(database, data) {
+  await run(
+    database,
+    `INSERT INTO maintenance_runtime_readings
+      (machine_id, runtime_hours, reported_at, reported_by)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(machine_id) DO UPDATE SET
+       runtime_hours = MAX(maintenance_runtime_readings.runtime_hours, excluded.runtime_hours),
+       reported_at = CASE
+         WHEN excluded.runtime_hours >= maintenance_runtime_readings.runtime_hours THEN excluded.reported_at
+         ELSE maintenance_runtime_readings.reported_at
+       END,
+       reported_by = CASE
+         WHEN excluded.runtime_hours >= maintenance_runtime_readings.runtime_hours THEN excluded.reported_by
+         ELSE maintenance_runtime_readings.reported_by
+       END`,
+    [
+      data.machineId,
+      data.runtimeHours,
+      data.reportedAt || new Date().toISOString(),
+      data.reportedBy ?? null,
+    ],
+  );
+}
+
 export async function insertChecklistItem(database, data) {
   const result = await run(
     database,
@@ -307,6 +357,32 @@ export async function listExecutionItems(database, executionId) {
   );
 }
 
+export async function findOccurrenceExecutionId(database, planId, occurrenceKey) {
+  const row = await get(
+    database,
+    `SELECT execution_id
+     FROM maintenance_occurrence_keys
+     WHERE plan_id = ? AND occurrence_key = ?`,
+    [planId, occurrenceKey],
+  );
+  return row?.execution_id ?? null;
+}
+
+export async function insertOccurrenceKey(database, data) {
+  await run(
+    database,
+    `INSERT INTO maintenance_occurrence_keys
+      (plan_id, occurrence_key, execution_id, created_at)
+     VALUES (?, ?, ?, ?)`,
+    [
+      data.planId,
+      data.occurrenceKey,
+      data.executionId,
+      data.createdAt || new Date().toISOString(),
+    ],
+  );
+}
+
 export async function findExecutionById(database, executionId) {
   const parsedId = Number(executionId);
   if (!Number.isInteger(parsedId) || parsedId < 1) return null;
@@ -332,16 +408,46 @@ export async function listExecutionsByPlanId(database, planId) {
   return executions;
 }
 
-export async function getPreventiveDueCounts(database, today = todayUtcDate()) {
+export async function getPreventiveDueCounts(
+  database,
+  { assignedTo = null } = {},
+  today = todayPlantDate(),
+) {
   const upcomingLimit = addUtcDays(today, 7);
+  const clauses = [];
+  const params = [today, today, today, upcomingLimit];
+
+  if (assignedTo !== null && assignedTo !== undefined) {
+    clauses.push('p.assigned_to = ?');
+    params.push(assignedTo);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+
   const row = await get(
     database,
     `SELECT
-       SUM(CASE WHEN next_due_date < ? THEN 1 ELSE 0 END) AS overdue,
-       SUM(CASE WHEN next_due_date = ? THEN 1 ELSE 0 END) AS due,
-       SUM(CASE WHEN next_due_date > ? AND next_due_date <= ? THEN 1 ELSE 0 END) AS upcoming
-     FROM maintenance_plans`,
-    [today, today, today, upcomingLimit],
+       SUM(CASE
+         WHEN p.frequency = 'working_hours'
+           THEN CASE WHEN r.runtime_hours > p.next_due_runtime_hours THEN 1 ELSE 0 END
+         WHEN p.next_due_date < ? THEN 1
+         ELSE 0
+       END) AS overdue,
+       SUM(CASE
+         WHEN p.frequency = 'working_hours'
+           THEN CASE WHEN r.runtime_hours = p.next_due_runtime_hours THEN 1 ELSE 0 END
+         WHEN p.next_due_date = ? THEN 1
+         ELSE 0
+       END) AS due,
+       SUM(CASE
+         WHEN p.frequency = 'working_hours'
+           THEN CASE WHEN r.runtime_hours < p.next_due_runtime_hours THEN 1 ELSE 0 END
+         WHEN p.next_due_date > ? AND p.next_due_date <= ? THEN 1
+         ELSE 0
+       END) AS upcoming
+     FROM maintenance_plans p
+     LEFT JOIN maintenance_runtime_readings r ON r.machine_id = p.machine_id
+     ${where}`,
+    params,
   );
   return {
     overduePreventive: Number(row?.overdue || 0),

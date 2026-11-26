@@ -4,25 +4,31 @@ import { findMachineById } from '../repositories/machines.js';
 import { insertRecord } from '../repositories/records.js';
 import {
   findExecutionById,
+  findMachineRuntime,
+  findOccurrenceExecutionId,
   findPreventivePlanById,
   insertChecklistItem,
   insertExecution,
   insertExecutionItem,
+  insertOccurrenceKey,
   insertPreventivePlan,
   listExecutionsByPlanId,
   listPreventivePlans,
   nextExecutionCode,
   updatePreventivePlanAfterCompletion,
+  upsertMachineRuntime,
 } from '../repositories/preventive-plans.js';
 import { findUserById } from '../repositories/users.js';
 import {
   validatePreventiveCompletionPayload,
   validatePreventivePlanPayload,
+  validatePreventiveRuntimePayload,
 } from '../validators.js';
 import {
   addCalendarMonths,
   addUtcDays,
   addWorkingDays,
+  dateOnlyForInstant,
 } from '../utils/date-only.js';
 import { generateDocumentCode } from './document-code.js';
 
@@ -97,7 +103,53 @@ export async function createPreventivePlan(database, payload, user) {
       });
     }
 
+    if (data.frequency === 'working_hours') {
+      const currentRuntime = await findMachineRuntime(database, machine.id);
+      if (currentRuntime && data.runtimeHours < currentRuntime.runtimeHours) {
+        throw new ApiError(
+          409,
+          `Reported runtime cannot be lower than the latest reading (${currentRuntime.runtimeHours})`,
+          'RUNTIME_READING_REGRESSION',
+        );
+      }
+      await upsertMachineRuntime(database, {
+        machineId: machine.id,
+        runtimeHours: data.runtimeHours,
+        reportedAt: timestamp,
+        reportedBy: user.id,
+      });
+    }
+
     return findPreventivePlanById(database, planId);
+  });
+}
+
+export async function reportPreventiveRuntime(database, planId, payload, user) {
+  const data = validatePreventiveRuntimePayload(payload);
+
+  return transaction(database, async () => {
+    const plan = await findPreventivePlanById(database, planId);
+    if (!plan) throw notFound('Preventive plan not found', 'PREVENTIVE_PLAN_NOT_FOUND');
+    assertCanComplete(plan, user);
+    if (plan.frequency !== 'working_hours') {
+      throw validationError('Runtime readings are only available for working-hours preventive plans');
+    }
+
+    const currentRuntime = await findMachineRuntime(database, plan.machineId);
+    if (currentRuntime && data.runtimeHours < currentRuntime.runtimeHours) {
+      throw new ApiError(
+        409,
+        `Reported runtime cannot be lower than the latest reading (${currentRuntime.runtimeHours})`,
+        'RUNTIME_READING_REGRESSION',
+      );
+    }
+    await upsertMachineRuntime(database, {
+      machineId: plan.machineId,
+      runtimeHours: data.runtimeHours,
+      reportedAt: new Date().toISOString(),
+      reportedBy: user.id,
+    });
+    return findPreventivePlanById(database, plan.id);
   });
 }
 
@@ -173,6 +225,18 @@ export async function completePreventivePlan(database, planId, payload, user) {
     const plan = await findPreventivePlanById(database, planId);
     if (!plan) throw notFound('Preventive plan not found', 'PREVENTIVE_PLAN_NOT_FOUND');
     assertCanComplete(plan, user);
+
+    const existingExecutionId = await findOccurrenceExecutionId(
+      database,
+      plan.id,
+      data.occurrenceKey,
+    );
+    if (existingExecutionId) {
+      const existingCompletion = await findExecutionById(database, existingExecutionId);
+      const currentPlan = await findPreventivePlanById(database, plan.id);
+      return { completion: existingCompletion, plan: currentPlan };
+    }
+
     const checklistResults = validateChecklistResults(plan, data.checklistResults);
 
     if (plan.frequency === 'working_hours' && data.runtimeHours === undefined) {
@@ -180,7 +244,7 @@ export async function completePreventivePlan(database, planId, payload, user) {
     }
 
     const completedAt = new Date().toISOString();
-    const completionDate = completedAt.slice(0, 10);
+    const completionDate = dateOnlyForInstant(completedAt);
     const nextDueDate = calculateNextDueDate(
       completionDate,
       plan.frequency,
@@ -199,6 +263,13 @@ export async function completePreventivePlan(database, planId, payload, user) {
       runtimeHours: plan.frequency === 'working_hours' ? data.runtimeHours : null,
       nextDueDate,
       nextDueRuntimeHours,
+    });
+
+    await insertOccurrenceKey(database, {
+      planId: plan.id,
+      occurrenceKey: data.occurrenceKey,
+      executionId,
+      createdAt: completedAt,
     });
 
     for (const result of checklistResults) {
@@ -220,6 +291,23 @@ export async function completePreventivePlan(database, planId, payload, user) {
       createdBy: user.id,
       createdAt: completedAt,
     });
+
+    if (plan.frequency === 'working_hours') {
+      const currentRuntime = await findMachineRuntime(database, plan.machineId);
+      if (currentRuntime && data.runtimeHours < currentRuntime.runtimeHours) {
+        throw new ApiError(
+          409,
+          `Reported runtime cannot be lower than the latest reading (${currentRuntime.runtimeHours})`,
+          'RUNTIME_READING_REGRESSION',
+        );
+      }
+      await upsertMachineRuntime(database, {
+        machineId: plan.machineId,
+        runtimeHours: data.runtimeHours,
+        reportedAt: completedAt,
+        reportedBy: user.id,
+      });
+    }
 
     await updatePreventivePlanAfterCompletion(database, plan.id, {
       nextDueDate,

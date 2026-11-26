@@ -74,6 +74,9 @@ export function DashboardScreen({ user, onOpenMachine, onOpenInventory, onOpenSc
   }, [load]);
 
   const attentionMachines = machines.filter((machine) => machine.status === 'faulted' || machine.status === 'maintenance' || machine.status === 'stopped');
+  const visibleSummaryItems = user.role === 'operator'
+    ? summaryItems.filter((item) => !item.key.toString().includes('Preventive'))
+    : summaryItems;
 
   if (loading && !summary) {
     return <View style={styles.center}><LoadingState label="Operasyon özeti hazırlanıyor…" /></View>;
@@ -115,7 +118,7 @@ export function DashboardScreen({ user, onOpenMachine, onOpenInventory, onOpenSc
       <View>
         <SectionTitle title="Bakım özeti" />
         <View style={styles.summaryGrid}>
-          {summaryItems.map((item) => (
+          {visibleSummaryItems.map((item) => (
             <Card key={item.key} style={styles.summaryCard}>
               <View style={[styles.summaryIcon, { backgroundColor: item.background }]}>
                 <Text style={[styles.summaryIconText, { color: item.color }]}>{item.icon}</Text>

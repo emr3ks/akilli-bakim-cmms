@@ -1,5 +1,5 @@
 import { run, transaction } from './db.js';
-import { addUtcDays, todayUtcDate } from './utils/date-only.js';
+import { addUtcDays, todayPlantDate } from './utils/date-only.js';
 
 export const DEMO_USERS = [
   {
@@ -304,12 +304,14 @@ export const DEMO_PREVENTIVE_PLANS = [
 
 export async function resetDatabase(database) {
   await run(database, 'DELETE FROM maintenance_execution_items');
+  await run(database, 'DELETE FROM maintenance_occurrence_keys');
   await run(database, 'DELETE FROM maintenance_executions');
   await run(database, 'DELETE FROM maintenance_checklist_items');
   await run(database, 'DELETE FROM maintenance_plans');
   await run(database, 'DELETE FROM work_orders');
   await run(database, 'DELETE FROM faults');
   await run(database, 'DELETE FROM maintenance_records');
+  await run(database, 'DELETE FROM maintenance_runtime_readings');
   await run(database, 'DELETE FROM machines');
   await run(database, 'DELETE FROM users');
   await run(
@@ -406,7 +408,7 @@ export async function seedDemoData(database) {
       );
     }
 
-    const demoToday = todayUtcDate();
+    const demoToday = todayPlantDate();
     for (const plan of DEMO_PREVENTIVE_PLANS) {
       const nextDueDate = addUtcDays(demoToday, plan.dueOffsetDays);
       const result = await run(
@@ -439,6 +441,16 @@ export async function seedDemoData(database) {
           `INSERT INTO maintenance_checklist_items (plan_id, position, title, measurement_label)
            VALUES (?, ?, ?, ?)`,
           [result.lastID, index + 1, item.title, item.measurementLabel ?? null],
+        );
+      }
+
+      if (plan.frequency === 'working_hours') {
+        await run(
+          database,
+          `INSERT INTO maintenance_runtime_readings
+            (machine_id, runtime_hours, reported_at, reported_by)
+           VALUES (?, ?, ?, ?)`,
+          [machineIds.get(plan.machineCode), plan.runtimeHours, timestamp, plan.assignedTo],
         );
       }
     }

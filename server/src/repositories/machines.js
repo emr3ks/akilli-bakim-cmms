@@ -15,6 +15,12 @@ const MACHINE_FIELDS = [
   'updated_at',
 ].join(', ');
 
+const MACHINE_SELECT = `
+  SELECT ${MACHINE_FIELDS}, runtime.runtime_hours AS current_runtime_hours
+  FROM machines
+  LEFT JOIN maintenance_runtime_readings runtime ON runtime.machine_id = machines.id
+`;
+
 export function mapMachine(row) {
   if (!row) return null;
   return {
@@ -28,6 +34,7 @@ export function mapMachine(row) {
     criticality: row.criticality,
     status: row.status,
     qrCode: row.qr_code,
+    currentRuntimeHours: row.current_runtime_hours ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -65,7 +72,7 @@ export async function listMachines(database, filters = {}) {
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const rows = await all(
     database,
-    `SELECT ${MACHINE_FIELDS} FROM machines ${where} ORDER BY id ASC`,
+    `${MACHINE_SELECT} ${where} ORDER BY machines.id ASC`,
     params,
   );
   return rows.map(mapMachine);
@@ -74,13 +81,13 @@ export async function listMachines(database, filters = {}) {
 export async function findMachineById(database, machineId) {
   const parsedId = Number(machineId);
   if (!Number.isInteger(parsedId) || parsedId < 1) return null;
-  const row = await get(database, `SELECT ${MACHINE_FIELDS} FROM machines WHERE id = ?`, [parsedId]);
+  const row = await get(database, `${MACHINE_SELECT} WHERE machines.id = ?`, [parsedId]);
   return mapMachine(row);
 }
 
 export async function findMachineByCode(database, code) {
   if (typeof code !== 'string' || !code.trim()) return null;
-  const row = await get(database, `SELECT ${MACHINE_FIELDS} FROM machines WHERE code = ?`, [code.trim().toUpperCase()]);
+  const row = await get(database, `${MACHINE_SELECT} WHERE machines.code = ?`, [code.trim().toUpperCase()]);
   return mapMachine(row);
 }
 

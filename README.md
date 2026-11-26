@@ -19,6 +19,7 @@ Faz 1–3 kapsamında Expo tabanlı iOS/Android/Web arayüzü, Express REST API,
 - **Arıza ve iş emri filtreleme:** Açık durum, aciliyet ve atanan teknisyene göre anlık filtreleme.
 - **Faz 2 dashboard sayaçları:** Açık arıza ve aktif iş emri sayıları ana özet panelinde gösterilir.
 - **Periyodik bakım planları:** Makine bazlı `PB-YYYY-NNN` planları; haftalık, aylık, 3 aylık, 6 aylık, yıllık ve çalışma saati bazlı periyotları destekler.
+- **Çalışma saati takibi:** Teknisyen güncel makine saatini raporlar; eşik, gecikme ve yaklaşma durumu okuma değerinden hesaplanır.
 - **Bakım takvimi:** Geciken, bugünkü, yaklaşan ve ileri tarihli planları metin ve renk etiketleriyle ayırır.
 - **Kontrol listesi icrası:** Teknisyen her kontrol maddesini işaretler, ölçüm/not girer; tüm maddeler tamamlandığında sonraki bakım tarihi otomatik hesaplanır.
 - **Bakım geçmişi:** Tamamlanan kontrol sonuçları, ölçümler, notlar ve yeni tarih plan bazında kayıt altına alınır.
@@ -129,6 +130,7 @@ Tüm makine yazma işlemleri `x-user-id` başlığındaki kullanıcı kimliği i
 | `GET` | `/api/preventive-plans` | Yönetici tüm planları, teknisyen yalnızca kendi atamalarını görür; `machineId` ve `assignedTo` filtrelerini destekler |
 | `GET` | `/api/preventive-plans/:id` | Yönetici veya planın atanmış teknisyeni |
 | `POST` | `/api/preventive-plans` | Yönetici; makine, periyot, teknisyen ve kontrol listesiyle `PB-YYYY-NNN` planı oluşturur |
+| `POST` | `/api/preventive-plans/:id/runtime` | Atanmış teknisyen/yönetici; çalışma saati planının güncel makine saatini raporlar |
 | `POST` | `/api/preventive-plans/:id/complete` | Atanmış teknisyen/yönetici; kontrol sonuçlarını kaydeder ve sonraki bakım tarihini ilerletir |
 | `GET` | `/api/preventive-plans/:id/completions` | Yönetici veya planın atanmış teknisyeni; tamamlanan bakım geçmişi |
 | `GET` | `/api/faults` | Rol kapsamlı: yönetici tümü, teknisyen ilgili kayıtlar, operatör kendi bildirimleri; `status`, `urgency`, `assignedTo` ve `machineId` filtrelerini destekler |
@@ -151,6 +153,10 @@ Tüm makine yazma işlemleri `x-user-id` başlığındaki kullanıcı kimliği i
 
 Fotoğraflar `photoBase64` + `photoMimeType` (arıza) ve `solutionPhotoBase64` + `solutionPhotoMimeType` (çözüm) alanlarıyla gönderilir. API JPEG, PNG ve WebP imaj magic byte'larını ve en fazla 2 MB çözülmüş boyutu doğrular.
 
+Periyodik bakım tarihleri `Europe/Istanbul` tesis saat diliminde hesaplanır. Çalışma saati planlarının durumu son raporlanan makine saati ile eşik değerden hesaplanır; eşiğe eşitken “günü gelen”, eşik aşıldığında “geciken” durumuna geçer. Okuma değerleri geriye gidemez.
+
+Bakım tamamlama isteği `occurrenceKey` ile gönderilir. Aynı anahtarla yapılan tekrar denemesi yeni geçmiş kaydı oluşturmaz ve ilk tamamlamanın sonucunu döndürür.
+
 Hatalar `{ "error": { "message": "...", "code": "..." } }` biçiminde döner. Yetkisiz istekler `401`, yetki dışı istekler `403`, doğrulama hataları `400` durum koduyla sonuçlanır.
 
 ## Veritabanı ve yapılandırma
@@ -169,6 +175,7 @@ Gerçek Expo Web uygulaması Edge üzerinde `390×844` mobil ve `1440×900` masa
 - [Faz 3 mobil periyodik bakım planları](docs/screenshots/after-phase3-mobile-preventive-plans.png)
 - [Faz 3 mobil yeni plan formu](docs/screenshots/after-phase3-mobile-preventive-create.png)
 - [Faz 3 mobil kontrol listesi icrası](docs/screenshots/after-phase3-mobile-preventive-checklist.png)
+- [Faz 3 mobil çalışma saati güncelleme](docs/screenshots/after-phase3-mobile-preventive-runtime.png)
 - [Faz 3 masaüstü periyodik bakım planları](docs/screenshots/after-phase3-desktop-preventive-plans.png)
 - [Öncesi mobil makine kartı](docs/screenshots/before-mobile-machine-detail.png) / [Sonrası mobil makine kartı](docs/screenshots/after-mobile-machine-detail.png)
 - [Öncesi masaüstü dashboard](docs/screenshots/before-desktop-dashboard.png) / [Sonrası masaüstü dashboard](docs/screenshots/after-desktop-dashboard.png)

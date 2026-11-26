@@ -5,7 +5,7 @@ import { createApp } from '../src/app.js';
 import { closeDatabase, createDatabase, run } from '../src/db.js';
 import { seedDemoData } from '../src/seed.js';
 import { calculateNextDueDate } from '../src/services/preventive-plan-service.js';
-import { addUtcDays, todayUtcDate } from '../src/utils/date-only.js';
+import { addUtcDays, dateOnlyForInstant, todayPlantDate } from '../src/utils/date-only.js';
 
 const ADMIN = { 'x-user-id': '1' };
 const TECHNICIAN = { 'x-user-id': '2' };
@@ -13,8 +13,15 @@ const OPERATOR = { 'x-user-id': '3' };
 
 let database;
 let app;
+let occurrenceCounter = 0;
+
+function nextOccurrenceKey() {
+  occurrenceCounter += 1;
+  return `test-occurrence-${occurrenceCounter}`;
+}
 
 beforeEach(async () => {
+  occurrenceCounter = 0;
   database = await createDatabase(':memory:');
   await seedDemoData(database);
   app = createApp({ db: database });
@@ -34,7 +41,7 @@ async function createPlan(overrides = {}) {
       name: 'Test periyodik bakım planı',
       frequency: 'weekly',
       assignedTo: 2,
-      nextDueDate: addUtcDays(todayUtcDate(), 1),
+      nextDueDate: addUtcDays(todayPlantDate(), 1),
       checklist: [
         { title: 'Yağ seviyesini kontrol et', measurementLabel: 'Yağ seviyesi (%)' },
         { title: 'Gürültüyü kontrol et' },
@@ -57,6 +64,7 @@ async function completePlan(plan, body = {}) {
     .post(`/api/preventive-plans/${plan.id}/complete`)
     .set(TECHNICIAN)
     .send({
+      occurrenceKey: nextOccurrenceKey(),
       checklistResults: resultsFor(plan),
       notes: 'Kontrol listesi eksiksiz tamamlandı.',
       ...body,
@@ -142,19 +150,19 @@ describe('Phase 3 preventive-plan API', () => {
     const technicianCompletion = await request(app)
       .post(`/api/preventive-plans/${otherPlan.body.plan.id}/complete`)
       .set(TECHNICIAN)
-      .send({ checklistResults: resultsFor(otherPlan.body.plan) });
+      .send({ occurrenceKey: nextOccurrenceKey(), checklistResults: resultsFor(otherPlan.body.plan) });
     expect(technicianCompletion.status).toBe(403);
 
     const operatorCompletion = await request(app)
       .post(`/api/preventive-plans/${otherPlan.body.plan.id}/complete`)
       .set(OPERATOR)
-      .send({ checklistResults: resultsFor(otherPlan.body.plan) });
+      .send({ occurrenceKey: nextOccurrenceKey(), checklistResults: resultsFor(otherPlan.body.plan) });
     expect(operatorCompletion.status).toBe(403);
 
     const adminCompletion = await request(app)
       .post(`/api/preventive-plans/${otherPlan.body.plan.id}/complete`)
       .set(ADMIN)
-      .send({ checklistResults: resultsFor(otherPlan.body.plan) });
+      .send({ occurrenceKey: nextOccurrenceKey(), checklistResults: resultsFor(otherPlan.body.plan) });
     expect(adminCompletion.status).toBe(200);
   });
 
@@ -224,7 +232,7 @@ describe('Phase 3 preventive-plan API', () => {
       });
       expect(completed.status).toBe(200);
       const expectedDate = calculateNextDueDate(
-        completed.body.completion.completedAt.slice(0, 10),
+        dateOnlyForInstant(completed.body.completion.completedAt),
         frequency,
         hours.intervalHours,
       );
@@ -252,10 +260,16 @@ describe('Phase 3 preventive-plan API', () => {
     const created = await createPlan();
     const plan = created.body.plan;
 
+    const missingOccurrenceKey = await request(app)
+      .post(`/api/preventive-plans/${plan.id}/complete`)
+      .set(TECHNICIAN)
+      .send({ checklistResults: resultsFor(plan) });
+    expect(missingOccurrenceKey.status).toBe(400);
+
     const missing = await request(app)
       .post(`/api/preventive-plans/${plan.id}/complete`)
       .set(TECHNICIAN)
-      .send({ checklistResults: [resultsFor(plan)[1]] });
+      .send({ occurrenceKey: nextOccurrenceKey(), checklistResults: [resultsFor(plan)[1]] });
     expect(missing.status).toBe(400);
     expect(missing.body.error.code).toBe('VALIDATION_ERROR');
 
@@ -263,6 +277,7 @@ describe('Phase 3 preventive-plan API', () => {
       .post(`/api/preventive-plans/${plan.id}/complete`)
       .set(TECHNICIAN)
       .send({
+        occurrenceKey: nextOccurrenceKey(),
         checklistResults: resultsFor(plan).map((result, index) => (
           index === 0 ? { ...result, completed: false } : result
         )),
@@ -272,19 +287,20 @@ describe('Phase 3 preventive-plan API', () => {
     const duplicate = await request(app)
       .post(`/api/preventive-plans/${plan.id}/complete`)
       .set(TECHNICIAN)
-      .send({ checklistResults: [resultsFor(plan)[0], resultsFor(plan)[0]] });
+      .send({ occurrenceKey: nextOccurrenceKey(), checklistResults: [resultsFor(plan)[0], resultsFor(plan)[0]] });
     expect(duplicate.status).toBe(400);
 
     const unknown = await request(app)
       .post(`/api/preventive-plans/${plan.id}/complete`)
       .set(TECHNICIAN)
-      .send({ checklistResults: [...resultsFor(plan), { itemId: 9999, completed: true }] });
+      .send({ occurrenceKey: nextOccurrenceKey(), checklistResults: [...resultsFor(plan), { itemId: 9999, completed: true }] });
     expect(unknown.status).toBe(400);
 
     const missingMeasurement = await request(app)
       .post(`/api/preventive-plans/${plan.id}/complete`)
       .set(TECHNICIAN)
       .send({
+        occurrenceKey: nextOccurrenceKey(),
         checklistResults: resultsFor(plan).map((result, index) => (
           index === 0 ? { ...result, measurementValue: undefined } : result
         )),
@@ -295,6 +311,7 @@ describe('Phase 3 preventive-plan API', () => {
       .post(`/api/preventive-plans/${plan.id}/complete`)
       .set(TECHNICIAN)
       .send({
+        occurrenceKey: nextOccurrenceKey(),
         checklistResults: resultsFor(plan).map((result, index) => (
           index === 0 ? { ...result, measurementValue: 0 } : result
         )),
@@ -312,8 +329,14 @@ describe('Phase 3 preventive-plan API', () => {
     const missingRuntime = await request(app)
       .post(`/api/preventive-plans/${working.body.plan.id}/complete`)
       .set(TECHNICIAN)
-      .send({ checklistResults: resultsFor(working.body.plan) });
+      .send({ occurrenceKey: nextOccurrenceKey(), checklistResults: resultsFor(working.body.plan) });
     expect(missingRuntime.status).toBe(400);
+
+    const blankRuntime = await request(app)
+      .post(`/api/preventive-plans/${working.body.plan.id}/complete`)
+      .set(TECHNICIAN)
+      .send({ occurrenceKey: nextOccurrenceKey(), checklistResults: resultsFor(working.body.plan), runtimeHours: '' });
+    expect(blankRuntime.status).toBe(400);
 
     await run(
       database,
@@ -324,10 +347,28 @@ describe('Phase 3 preventive-plan API', () => {
       .post(`/api/preventive-plans/${working.body.plan.id}/complete`)
       .set(otherTechnician)
       .send({
+        occurrenceKey: nextOccurrenceKey(),
         checklistResults: resultsFor(working.body.plan),
         runtimeHours: 1400,
       });
     expect(forbidden.status).toBe(403);
+  });
+
+  it('returns the original completion when the same occurrence key is retried', async () => {
+    const created = await createPlan();
+    const plan = created.body.plan;
+    const occurrenceKey = 'test-occurrence-retry-001';
+
+    const first = await completePlan(plan, { occurrenceKey });
+    const retry = await completePlan(plan, { occurrenceKey });
+    expect(first.status).toBe(200);
+    expect(retry.status).toBe(200);
+    expect(retry.body.completion.id).toBe(first.body.completion.id);
+
+    const history = await request(app)
+      .get(`/api/preventive-plans/${plan.id}/completions`)
+      .set(TECHNICIAN);
+    expect(history.body.completions).toHaveLength(1);
   });
 
   it('records completion history, per-item results, a maintenance summary, and the advanced plan', async () => {
@@ -379,6 +420,69 @@ describe('Phase 3 preventive-plan API', () => {
     expect(detail.body.plan.nextDueDate).toBe(completed.body.plan.nextDueDate);
   });
 
+  it('drives working-hours status from the latest machine runtime threshold', async () => {
+    const created = await createPlan({
+      frequency: 'working_hours',
+      intervalHours: 160,
+      runtimeHours: 1200,
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.plan).toMatchObject({
+      currentRuntimeHours: 1200,
+      nextDueRuntimeHours: 1360,
+      dueState: 'upcoming',
+    });
+
+    const atThreshold = await request(app)
+      .post(`/api/preventive-plans/${created.body.plan.id}/runtime`)
+      .set(TECHNICIAN)
+      .send({ runtimeHours: 1360 });
+    expect(atThreshold.status).toBe(200);
+    expect(atThreshold.body.plan).toMatchObject({
+      currentRuntimeHours: 1360,
+      dueState: 'due',
+    });
+
+    const overThreshold = await request(app)
+      .post(`/api/preventive-plans/${created.body.plan.id}/runtime`)
+      .set(TECHNICIAN)
+      .send({ runtimeHours: 1400 });
+    expect(overThreshold.status).toBe(200);
+    expect(overThreshold.body.plan).toMatchObject({
+      currentRuntimeHours: 1400,
+      dueState: 'overdue',
+    });
+    const machine = await request(app).get('/api/machines/1').set(TECHNICIAN);
+    expect(machine.body.machine.currentRuntimeHours).toBe(1400);
+
+    const regression = await request(app)
+      .post(`/api/preventive-plans/${created.body.plan.id}/runtime`)
+      .set(TECHNICIAN)
+      .send({ runtimeHours: 1300 });
+    expect(regression.status).toBe(409);
+    expect(regression.body.error.code).toBe('RUNTIME_READING_REGRESSION');
+
+    const stalePlanCreation = await createPlan({
+      frequency: 'working_hours',
+      intervalHours: 160,
+      runtimeHours: 1300,
+    });
+    expect(stalePlanCreation.status).toBe(409);
+    expect(stalePlanCreation.body.error.code).toBe('RUNTIME_READING_REGRESSION');
+
+    const nonWorkingPlan = await createPlan();
+    const invalidTarget = await request(app)
+      .post(`/api/preventive-plans/${nonWorkingPlan.body.plan.id}/runtime`)
+      .set(TECHNICIAN)
+      .send({ runtimeHours: 1500 });
+    expect(invalidTarget.status).toBe(400);
+  });
+
+  it('uses the plant time zone for calendar dates', () => {
+    expect(dateOnlyForInstant('2026-11-26T22:30:00.000Z')).toBe('2026-11-27');
+    expect(dateOnlyForInstant('2026-11-26T21:30:00.000Z')).toBe('2026-11-27');
+  });
+
   it('exposes due, upcoming, and overdue preventive counters on the dashboard', async () => {
     const summary = await request(app).get('/api/dashboard/summary').set(ADMIN);
     expect(summary.status).toBe(200);
@@ -386,6 +490,13 @@ describe('Phase 3 preventive-plan API', () => {
       duePreventive: 1,
       upcomingPreventive: 2,
       overduePreventive: 1,
+    });
+
+    const operatorSummary = await request(app).get('/api/dashboard/summary').set(OPERATOR);
+    expect(operatorSummary.body).toMatchObject({
+      duePreventive: 0,
+      upcomingPreventive: 0,
+      overduePreventive: 0,
     });
   });
 });

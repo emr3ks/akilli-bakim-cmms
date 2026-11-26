@@ -494,9 +494,29 @@ export function validatePreventivePlanFilters(query = {}) {
   return filters;
 }
 
+export function validatePreventiveRuntimePayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw validationError('Preventive runtime request body must be a JSON object');
+  }
+  return {
+    runtimeHours: preventiveHours(
+      payload.runtimeHours,
+      'Preventive runtimeHours',
+      { allowZero: true },
+    ),
+  };
+}
+
 export function validatePreventiveCompletionPayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw validationError('Preventive completion request body must be a JSON object');
+  }
+  if (!isNonEmptyString(payload.occurrenceKey)) {
+    throw validationError('Preventive completion occurrenceKey is required and must be a non-empty string');
+  }
+  const occurrenceKey = payload.occurrenceKey.trim();
+  if (occurrenceKey.length < 8 || occurrenceKey.length > 100) {
+    throw validationError('Preventive completion occurrenceKey must be 8 to 100 characters');
   }
   if (!Array.isArray(payload.checklistResults) || payload.checklistResults.length === 0) {
     throw validationError('Preventive completion checklistResults must contain at least one item');
@@ -538,6 +558,7 @@ export function validatePreventiveCompletionPayload(payload) {
   });
 
   const data = {
+    occurrenceKey,
     checklistResults,
     notes: preventiveText(payload.notes, 'Preventive completion notes', { maxLength: 4000 }),
   };
@@ -546,7 +567,6 @@ export function validatePreventiveCompletionPayload(payload) {
     data.runtimeHours = preventiveHours(
       payload.runtimeHours,
       'Preventive completion runtimeHours',
-      { allowZero: true },
     );
   }
 

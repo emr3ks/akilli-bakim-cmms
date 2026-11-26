@@ -68,6 +68,12 @@ await assertNoHorizontalOverflow(mobile, 'Mobile preventive plan screen');
 await mobile.getByText('+ Yeni plan', { exact: true }).click();
 const preventiveForm = mobile.getByTestId('preventive-plan-modal');
 await preventiveForm.waitFor({ state: 'visible', timeout: 30_000 });
+await preventiveForm.getByText('Çalışma Saati Bazlı', { exact: true }).click();
+await preventiveForm.getByText('MCH-2026-006 · Paletleme Konveyörü', { exact: true }).click();
+const prefilledRuntime = preventiveForm.getByLabel('Mevcut çalışma saati');
+if ((await prefilledRuntime.inputValue()) !== '1200') {
+  throw new Error('Working-hours plan form did not prefill the machine runtime reading.');
+}
 await capture(mobile, 'after-phase3-mobile-preventive-create.png');
 await preventiveForm.getByText('Kapat', { exact: true }).click();
 
@@ -175,6 +181,13 @@ await preventiveCompletion.waitFor({ state: 'visible', timeout: 30_000 });
 await capture(technician, 'after-phase3-mobile-preventive-checklist.png');
 await assertNoHorizontalOverflow(technician, 'Mobile preventive checklist');
 await preventiveCompletion.getByText('Kapat', { exact: true }).click();
+const runtimeCard = technician.getByTestId('preventive-plan-PB-2026-006');
+await runtimeCard.getByText('Çalışma saatini güncelle', { exact: true }).click();
+const preventiveRuntime = technician.getByTestId('preventive-runtime-modal');
+await preventiveRuntime.waitFor({ state: 'visible', timeout: 30_000 });
+await capture(technician, 'after-phase3-mobile-preventive-runtime.png');
+await assertNoHorizontalOverflow(technician, 'Mobile preventive runtime update');
+await preventiveRuntime.getByText('Kapat', { exact: true }).click();
 await technician.getByTestId('tab-workorders').click();
 await technician.getByTestId('work-orders-screen').waitFor({ state: 'visible', timeout: 30_000 });
 await technician.getByTestId('work-orders-section-orders').click();

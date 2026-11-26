@@ -37,6 +37,7 @@ export interface Machine {
   criticality: Criticality;
   status: MachineStatus;
   qrCode: string;
+  currentRuntimeHours: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -243,6 +244,7 @@ export interface PreventivePlan {
   } | null;
   nextDueDate: string;
   nextDueRuntimeHours: number | null;
+  currentRuntimeHours: number | null;
   intervalHours: number | null;
   checklistItems: PreventiveChecklistItem[];
   dueState: PreventiveDueState;
@@ -271,6 +273,7 @@ export interface PreventiveChecklistResultInput {
 }
 
 export interface PreventiveCompletionInput {
+  occurrenceKey: string;
   checklistResults: PreventiveChecklistResultInput[];
   notes?: string | null;
   runtimeHours?: number;

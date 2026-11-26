@@ -204,6 +204,12 @@ export const api = {
       body: plan,
       userId,
     }),
+  reportPreventiveRuntime: (userId: number, id: number, runtimeHours: number) =>
+    request<{ plan: PreventivePlan }>(`/preventive-plans/${id}/runtime`, {
+      method: 'POST',
+      body: { runtimeHours },
+      userId,
+    }),
   completePreventivePlan: (userId: number, id: number, completion: PreventiveCompletionInput) =>
     request<{ completion: PreventiveCompletion; plan: PreventivePlan }>(`/preventive-plans/${id}/complete`, {
       method: 'POST',
