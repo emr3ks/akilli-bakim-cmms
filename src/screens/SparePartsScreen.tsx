@@ -223,9 +223,10 @@ function PartFormModal({
             <OptionPicker label="Birim" value={unit} onChange={setUnit} options={unitOptions} />
             <View style={styles.twoFieldRow}>
               <FormField
-                label="Mevcut stok"
+                label={part ? 'Mevcut stok (stok girişi ile değiştirilir)' : 'Mevcut stok'}
                 value={currentStock}
                 onChangeText={setCurrentStock}
+                editable={!part}
                 placeholder="0"
                 keyboardType="decimal-pad"
                 containerStyle={styles.twoField}
@@ -415,7 +416,9 @@ export function SparePartsScreen({ user }: SparePartsScreenProps) {
 
   const savePart = async (input: SparePartInput) => {
     if (editingPart) {
-      const response = await api.updateSparePart(user.id, editingPart.id, input);
+      const editableFields: Partial<SparePartInput> = { ...input };
+      delete editableFields.currentStock;
+      const response = await api.updateSparePart(user.id, editingPart.id, editableFields);
       setActionMessage(`${response.part.code} parçası güncellendi.`);
     } else {
       const response = await api.createSparePart(user.id, input);

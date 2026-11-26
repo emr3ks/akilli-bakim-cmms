@@ -371,6 +371,30 @@ export async function countActiveStockUsagesForPart(database, partId) {
   return Number(row?.count || 0);
 }
 
+export async function countActiveStockUsagesForMachine(database, machineId) {
+  const row = await get(
+    database,
+    `SELECT COUNT(*) AS count
+     FROM stock_usages su
+     WHERE su.returned_at IS NULL
+       AND (
+         su.work_order_id IN (
+           SELECT w.id
+           FROM work_orders w
+           JOIN faults f ON f.id = w.fault_id
+           WHERE f.machine_id = ?
+         )
+         OR su.preventive_plan_id IN (
+           SELECT p.id
+           FROM maintenance_plans p
+           WHERE p.machine_id = ?
+         )
+       )`,
+    [machineId, machineId],
+  );
+  return Number(row?.count || 0);
+}
+
 export const countCriticalSpareParts = countStockAlerts;
 export const deleteSparePartById = deleteSparePart;
 
@@ -445,8 +469,7 @@ export async function listStockMovements(database, filters = {}) {
     database,
     `${STOCK_MOVEMENT_SELECT}
      ${where}
-     ORDER BY m.created_at DESC, m.id DESC
-     LIMIT 500`,
+     ORDER BY m.created_at DESC, m.id DESC`,
     params,
   );
   return rows.map(mapStockMovement);
@@ -561,11 +584,20 @@ export async function listStockUsages(database, { workOrderId = null, preventive
   return rows.map(mapStockUsage);
 }
 
-export async function updateStockUsageQuantity(database, usageId, quantity) {
+export async function updateStockUsageQuantity(database, usageId, quantity, unitCost) {
+  const updates = ['quantity = ?'];
+  const params = [quantity];
+  if (unitCost !== undefined) {
+    updates.push('unit_cost = ?');
+    params.push(unitCost);
+  }
+  params.push(usageId);
   await run(
     database,
-    'UPDATE stock_usages SET quantity = ? WHERE id = ? AND returned_at IS NULL',
-    [quantity, usageId],
+    `UPDATE stock_usages
+     SET ${updates.join(', ')}
+     WHERE id = ? AND returned_at IS NULL`,
+    params,
   );
   return findStockUsageById(database, usageId);
 }

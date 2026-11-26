@@ -133,7 +133,7 @@ Tüm makine yazma işlemleri `x-user-id` başlığındaki kullanıcı kimliği i
 | `GET` | `/api/auth/demo-users` | Herkese açık |
 | `POST` | `/api/auth/login` | Herkese açık |
 | `GET` | `/api/dashboard/summary` | Oturum açmış kullanıcı; açık arıza, aktif iş emri, periyodik bakım ve kritik stok parçası sayaçlarını destekler |
-| `GET` | `/api/spare-parts` | Oturum açmış kullanıcı; `q`, `category`, `status` filtreleriyle yedek parça kataloğu |
+| `GET` | `/api/spare-parts` | Oturum açmış kullanıcı; `q`, `code`, `name`, `category`, `status` filtreleriyle yedek parça kataloğu |
 | `GET/POST` | `/api/spare-parts` | Okuma: herkese açık oturum; yazma: yönetici |
 | `GET/PUT/DELETE` | `/api/spare-parts/:id` | Okuma: herkese açık oturum; güncelleme/silme: yönetici |
 | `POST` | `/api/spare-parts/:id/stock-movements` | Yönetici; satın alma/stok girişi ve hareket kaydı |

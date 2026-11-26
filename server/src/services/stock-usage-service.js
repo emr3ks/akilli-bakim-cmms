@@ -126,6 +126,10 @@ export async function addContextPart(database, kind, id, payload, user) {
         database,
         existingUsage.id,
         existingUsage.quantity + data.quantity,
+        (
+          (existingUsage.quantity * existingUsage.unitCost)
+          + (data.quantity * part.unitCost)
+        ) / (existingUsage.quantity + data.quantity),
       )
       : await insertStockUsage(database, {
         partId: part.id,

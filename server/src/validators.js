@@ -715,6 +715,14 @@ export function validateSparePartFilters(query = {}) {
     if (typeof query.q !== 'string') throw validationError('q must be a string');
     filters.q = query.q.trim();
   }
+  if (query.code !== undefined) {
+    if (typeof query.code !== 'string') throw validationError('code must be a string');
+    filters.code = query.code.trim();
+  }
+  if (query.name !== undefined) {
+    if (typeof query.name !== 'string') throw validationError('name must be a string');
+    filters.name = query.name.trim();
+  }
   if (query.category !== undefined && query.category !== '') {
     const category = typeof query.category === 'string'
       ? SPARE_PART_CATEGORY_ALIASES[query.category.trim().toLocaleLowerCase('tr-TR')]

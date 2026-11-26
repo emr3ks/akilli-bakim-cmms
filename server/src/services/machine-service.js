@@ -1,4 +1,4 @@
-import { run } from '../db.js';
+import { run, transaction } from '../db.js';
 import { ApiError, notFound } from '../errors.js';
 import {
   findMachineByCode,
@@ -6,6 +6,7 @@ import {
   insertMachine,
   updateMachine,
 } from '../repositories/machines.js';
+import { countActiveStockUsagesForMachine } from '../repositories/spare-parts.js';
 import { validateMachinePayload } from '../validators.js';
 
 function isUniqueConstraint(error) {
@@ -61,7 +62,18 @@ export async function updateMachineById(database, machineId, payload) {
 }
 
 export async function deleteMachineById(database, machineId) {
-  const machine = await getMachineOrThrow(database, machineId);
-  await run(database, 'DELETE FROM machines WHERE id = ?', [machine.id]);
-  return machine;
+  return transaction(database, async () => {
+    const machine = await getMachineOrThrow(database, machineId);
+    const activeUsageCount = await countActiveStockUsagesForMachine(database, machine.id);
+    if (activeUsageCount > 0) {
+      throw new ApiError(
+        409,
+        'This machine has active spare-part usage; return the parts before deleting it',
+        'MACHINE_HAS_STOCK_USAGES',
+        { activeUsageCount },
+      );
+    }
+    await run(database, 'DELETE FROM machines WHERE id = ?', [machine.id]);
+    return machine;
+  });
 }

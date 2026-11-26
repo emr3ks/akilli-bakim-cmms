@@ -82,11 +82,31 @@ describe('Phase 4 spare-part catalog API', () => {
       .set(ADMIN);
     expect(byCode.body.parts.map((part) => part.code)).toEqual(['YDK-2026-002']);
 
+    const byExactCode = await request(app)
+      .get('/api/spare-parts')
+      .query({ code: 'YDK-2026-002' })
+      .set(ADMIN);
+    expect(byExactCode.body.parts.map((part) => part.code)).toEqual(['YDK-2026-002']);
+
+    const byExactName = await request(app)
+      .get('/api/spare-parts')
+      .query({ name: 'Trapez' })
+      .set(ADMIN);
+    expect(byExactName.body.parts.map((part) => part.code)).toEqual(['YDK-2026-002']);
+
     const byName = await request(app)
       .get('/api/spare-parts')
       .query({ q: 'Rulman' })
       .set(ADMIN);
     expect(byName.body.parts.map((part) => part.code)).toContain('YDK-2026-001');
+
+    const bySearchCategory = await request(app)
+      .get('/api/spare-parts')
+      .query({ q: 'hidraulic_pneumatic' })
+      .set(ADMIN);
+    expect(bySearchCategory.body.parts.every(
+      (part) => part.category === 'hydraulic_pneumatic',
+    )).toBe(true);
 
     const byCategory = await request(app)
       .get('/api/spare-parts')
@@ -155,6 +175,13 @@ describe('Phase 4 spare-part catalog API', () => {
       name: 'Güncellenmiş rulman seti',
       currentStock: 7,
     });
+
+    const nameOnlyUpdate = await request(app)
+      .put(`/api/spare-parts/${created.body.part.id}`)
+      .set(ADMIN)
+      .send({ name: 'Yalnızca adı güncellenen rulman seti' });
+    expect(nameOnlyUpdate.status).toBe(200);
+    expect(nameOnlyUpdate.body.part.currentStock).toBe(7);
 
     const adjustmentMovements = await request(app)
       .get('/api/stock-movements')
@@ -274,6 +301,54 @@ describe('Phase 4 work-order and preventive-plan stock usage', () => {
     ))).toBe(true);
   });
 
+  it('uses a weighted cost when the same part is consumed again after a price change', async () => {
+    const createdPart = await request(app)
+      .post('/api/spare-parts')
+      .set(ADMIN)
+      .send({
+        ...NEW_PART,
+        code: 'YDK-2026-011',
+        name: 'Maliyet değişim testi parçası',
+        currentStock: 10,
+        unitCost: 100,
+      });
+    expect(createdPart.status).toBe(201);
+
+    const workOrderId = await recordIdByCode('/api/work-orders', 'IE-2026-002');
+    const firstUsage = await request(app)
+      .post(`/api/work-orders/${workOrderId}/parts`)
+      .set(TECHNICIAN)
+      .send({ partId: createdPart.body.part.id, quantity: 1 });
+    expect(firstUsage.status).toBe(201);
+
+    const priceUpdate = await request(app)
+      .put(`/api/spare-parts/${createdPart.body.part.id}`)
+      .set(ADMIN)
+      .send({ unitCost: 200 });
+    expect(priceUpdate.status).toBe(200);
+
+    const mergedUsage = await request(app)
+      .post(`/api/work-orders/${workOrderId}/parts`)
+      .set(TECHNICIAN)
+      .send({ partId: createdPart.body.part.id, quantity: 1 });
+    expect(mergedUsage.status).toBe(201);
+    expect(mergedUsage.body.usage).toMatchObject({
+      quantity: 2,
+      unitCost: 150,
+      totalCost: 300,
+    });
+
+    const movements = await request(app)
+      .get('/api/stock-movements')
+      .query({ partId: createdPart.body.part.id, movementType: 'out' })
+      .set(ADMIN);
+    expect(movements.body.movements).toHaveLength(2);
+    expect(movements.body.movements.reduce(
+      (total, movement) => total + movement.totalCost,
+      0,
+    )).toBe(300);
+  });
+
   it('updates a usage quantity with matching stock and movement changes', async () => {
     const workOrderId = await recordIdByCode('/api/work-orders', 'IE-2026-003');
     const part = await partByCode('YDK-2026-002');
@@ -391,6 +466,27 @@ describe('Phase 4 work-order and preventive-plan stock usage', () => {
     expect(forbidden.status).toBe(403);
   });
 
+  it('blocks machine deletion while descendant records still consume stock', async () => {
+    const part = await partByCode('YDK-2026-007');
+    const planId = await recordIdByCode('/api/preventive-plans', 'PB-2026-003');
+    const beforeUsage = await request(app)
+      .get(`/api/preventive-plans/${planId}/parts`)
+      .set(TECHNICIAN);
+    expect(beforeUsage.body.parts.some((usage) => usage.partId === part.id)).toBe(true);
+
+    const blocked = await request(app)
+      .delete('/api/machines/3')
+      .set(ADMIN);
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error.code).toBe('MACHINE_HAS_STOCK_USAGES');
+    expect((await partByCode(part.code)).currentStock).toBe(part.currentStock);
+
+    const afterUsage = await request(app)
+      .get(`/api/preventive-plans/${planId}/parts`)
+      .set(TECHNICIAN);
+    expect(afterUsage.body.parts.some((usage) => usage.partId === part.id)).toBe(true);
+  });
+
   it('prevents changes on final work orders and deletion of actively used parts', async () => {
     const closedWorkOrderId = await recordIdByCode('/api/work-orders', 'IE-2026-005');
     const part = await partByCode('YDK-2026-002');
@@ -407,6 +503,34 @@ describe('Phase 4 work-order and preventive-plan stock usage', () => {
       .set(ADMIN);
     expect(deleteBlocked.status).toBe(409);
     expect(deleteBlocked.body.error.code).toBe('SPARE_PART_IN_USE');
+  });
+
+  it('returns the complete movement ledger beyond 500 records', async () => {
+    const part = await partByCode('YDK-2026-002');
+    for (let index = 0; index < 501; index += 1) {
+      await run(
+        database,
+        `INSERT INTO stock_movements
+          (part_id, part_code, part_name, movement_type, quantity, unit_cost,
+           user_id, work_order_id, preventive_plan_id, usage_id, note, created_at)
+         VALUES (?, ?, ?, 'in', 1, ?, 1, NULL, NULL, NULL, ?, ?)`,
+        [
+          part.id,
+          part.code,
+          part.name,
+          part.unitCost,
+          `Arşiv hareketi ${index + 1}`,
+          `2026-10-${String((index % 28) + 1).padStart(2, '0')}T08:00:00.000Z`,
+        ],
+      );
+    }
+
+    const response = await request(app)
+      .get('/api/stock-movements')
+      .query({ partId: part.id })
+      .set(ADMIN);
+    expect(response.status).toBe(200);
+    expect(response.body.movements.length).toBeGreaterThanOrEqual(501);
   });
 
   it('exposes dated movement history with user, type, quantity, and context', async () => {
