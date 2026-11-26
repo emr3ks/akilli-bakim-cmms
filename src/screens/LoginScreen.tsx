@@ -15,9 +15,9 @@ import type { Role, User } from '../types';
 import { Button, ErrorState, LoadingState, roleLabels } from '../ui';
 
 const roleDescriptions: Record<Role, string> = {
-  admin: 'Makine envanterini, QR kimliklerini ve kullanıcı operasyonlarını yönetin.',
-  technician: 'Makine kartlarını inceleyin, QR okutun ve bakım/arıza kaydı oluşturun.',
-  operator: 'Makineyi görüntüleyin, QR ile hızlı arıza bildirimi gönderin.',
+  admin: 'Arızaları inceleyin, iş emirlerini oluşturun ve teknisyenlere atayın.',
+  technician: 'Size atanan iş emirlerini müdahale notu ve çözüm fotoğrafıyla kapatın.',
+  operator: 'Makineyi görüntüleyin, QR ile fotoğraflı hızlı arıza bildirimi gönderin.',
 };
 
 export function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -11,9 +12,10 @@ import {
 import QRCode from 'react-native-qrcode-svg';
 
 import { api } from '../api';
+import { FaultReportModal } from '../components/FaultReportModal';
 import { exportMachineCardPdf, printMachineCard } from '../printing';
 import { colors, radius, spacing, typography } from '../theme';
-import type { Machine, MachineRecord, RecordType, User } from '../types';
+import type { Fault, Machine, MachineRecord, User } from '../types';
 import {
   Button,
   Card,
@@ -53,28 +55,31 @@ function formatDate(value: string): string {
 export function MachineDetailScreen({ machine, user, onClose, onChanged, onDeleted }: MachineDetailScreenProps) {
   const [current, setCurrent] = useState(machine);
   const [records, setRecords] = useState<MachineRecord[]>([]);
+  const [phaseTwoFaults, setPhaseTwoFaults] = useState<Fault[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [severity, setSeverity] = useState('medium');
-  const [recordType, setRecordType] = useState<RecordType>(user.role === 'operator' ? 'fault' : 'maintenance');
   const [submitting, setSubmitting] = useState(false);
   const [formVisible, setFormVisible] = useState(false);
+  const [faultFormVisible, setFaultFormVisible] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [machineResponse, maintenanceResponse, faultResponse] = await Promise.all([
+      const [machineResponse, maintenanceResponse, faultResponse, phaseTwoResponse] = await Promise.all([
         api.getMachine(user.id, machine.id),
         api.getRecords(user.id, machine.id, 'maintenance'),
         api.getRecords(user.id, machine.id, 'fault'),
+        api.getFaults(user.id, { machineId: machine.id }),
       ]);
       setCurrent(machineResponse.machine);
       setRecords([...maintenanceResponse.records, ...faultResponse.records].sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       ));
+      setPhaseTwoFaults(phaseTwoResponse.faults);
       onChanged(machineResponse.machine);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Makine detayları alınamadı.');
@@ -95,11 +100,11 @@ export function MachineDetailScreen({ machine, user, onClose, onChanged, onDelet
     setSubmitting(true);
     setActionMessage(null);
     try {
-      if (recordType === 'fault') {
-        await api.createFaultRecord(user.id, current.id, { description, severity });
-      } else {
-        await api.createMaintenanceRecord(user.id, current.id, { type: recordType, description, severity });
-      }
+      await api.createMaintenanceRecord(user.id, current.id, {
+        type: 'maintenance',
+        description,
+        severity,
+      });
       setDescription('');
       await load();
       setActionMessage('Kayıt oluşturuldu ve makine durumu güncellendi.');
@@ -204,48 +209,50 @@ export function MachineDetailScreen({ machine, user, onClose, onChanged, onDelet
             </Card>
 
             <Card style={styles.recordCard}>
-              <SectionTitle title={user.role === 'operator' ? 'Hızlı arıza bildirimi' : 'Bakım / arıza kaydı'} />
+              <SectionTitle title="Hızlı arıza bildirimi" />
               <Text style={styles.cardDescription}>
-                {user.role === 'operator'
-                  ? 'Tespit ettiğiniz sorunu kaydedin; makine otomatik olarak arızalı olarak işaretlenir.'
-                  : 'Bakım veya arıza kaydı oluşturun; makine durumu kayıt türüne göre güncellenir.'}
+                Tespit ettiğiniz sorunu başlık, aciliyet ve fotoğrafla saniyeler içinde bildirin.
               </Text>
-              {user.role !== 'operator' ? (
-                <OptionPicker
-                  label="Kayıt türü"
-                  value={recordType}
-                  onChange={setRecordType}
-                  options={[
-                    { value: 'maintenance', label: 'Bakım' },
-                    { value: 'fault', label: 'Arıza' },
-                  ]}
-                />
-              ) : null}
-              <FormField
-                label="Açıklama"
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Örn. Motor sesi anormal ve eksen titriyor…"
-                multiline
-                maxLength={4000}
-              />
-              <OptionPicker
-                label="Önem seviyesi"
-                value={severity}
-                onChange={setSeverity}
-                options={[
-                  { value: 'low', label: 'Düşük' },
-                  { value: 'medium', label: 'Orta' },
-                  { value: 'high', label: 'Yüksek' },
-                ]}
-              />
-              {actionMessage ? <Text style={styles.actionMessage}>{actionMessage}</Text> : null}
               <Button
-                title={recordType === 'fault' ? 'Arıza bildir' : 'Bakım kaydı oluştur'}
-                onPress={() => void submitRecord()}
-                loading={submitting}
-                variant={recordType === 'fault' ? 'danger' : 'primary'}
+                title="Arıza Bildir"
+                onPress={() => setFaultFormVisible(true)}
+                variant="danger"
+                testID="open-fault-report"
               />
+              {user.role !== 'operator' ? (
+                <>
+                  <View style={styles.legacyDivider} />
+                  <SectionTitle title="Faz 1 planlı bakım kaydı" />
+                  <Text style={styles.cardDescription}>
+                    Planlı bakım notları ayrı kayıt türünde tutulur; arıza bildirimleri yalnızca yukarıdaki hızlı formdan oluşturulur.
+                  </Text>
+                  <FormField
+                    label="Açıklama"
+                    value={description}
+                    onChangeText={setDescription}
+                    placeholder="Örn. Motor sesi anormal ve eksen titriyor…"
+                    multiline
+                    maxLength={4000}
+                  />
+                  <OptionPicker
+                    label="Önem seviyesi"
+                    value={severity}
+                    onChange={setSeverity}
+                    options={[
+                      { value: 'low', label: 'Düşük' },
+                      { value: 'medium', label: 'Orta' },
+                      { value: 'high', label: 'Yüksek' },
+                    ]}
+                  />
+                  <Button
+                    title="Bakım kaydı oluştur"
+                    onPress={() => void submitRecord()}
+                    loading={submitting}
+                    variant="secondary"
+                  />
+                </>
+              ) : null}
+              {actionMessage ? <Text style={styles.actionMessage}>{actionMessage}</Text> : null}
             </Card>
 
             <Card>
@@ -263,6 +270,45 @@ export function MachineDetailScreen({ machine, user, onClose, onChanged, onDelet
                     <Text style={styles.recordDescription}>{record.description}</Text>
                     {record.severity ? <Text style={styles.recordSeverity}>Önem: {record.severity.toUpperCase()}</Text> : null}
                   </View>
+                </View>
+              ))}
+            </Card>
+
+            <Card>
+              <SectionTitle
+                title="Faz 2 arıza kayıtları"
+                action={<Text style={styles.count}>{phaseTwoFaults.length} kayıt</Text>}
+              />
+              {phaseTwoFaults.length === 0 ? (
+                <View style={styles.emptyRecords}>
+                  <Text style={styles.emptyRecordsText}>Bu makine için fotoğraflı arıza kaydı bulunmuyor.</Text>
+                </View>
+              ) : phaseTwoFaults.map((fault) => (
+                <View key={fault.id} style={styles.phaseTwoFaultItem}>
+                  <View style={styles.phaseTwoFaultHeader}>
+                    <Text style={styles.phaseTwoFaultCode}>{fault.code}</Text>
+                    <Text style={styles.phaseTwoFaultUrgency}>
+                      {fault.urgency === 'critical' ? 'Kritik' : fault.urgency === 'high' ? 'Yüksek' : fault.urgency === 'medium' ? 'Orta' : 'Düşük'}
+                    </Text>
+                  </View>
+                  <Text style={styles.phaseTwoFaultTitle}>{fault.title}</Text>
+                  <Text style={styles.phaseTwoFaultDescription}>{fault.description}</Text>
+                  <View style={styles.phaseTwoFaultMetaRow}>
+                    <Text style={styles.phaseTwoFaultMeta}>
+                      {fault.category === 'mechanical' ? 'Mekanik'
+                        : fault.category === 'electrical' ? 'Elektrik'
+                          : fault.category === 'pneumatic_hydraulic' ? 'Pnömatik / Hidrolik'
+                            : fault.category === 'software_sensor' ? 'Yazılım / Sensör' : 'Diğer'}
+                    </Text>
+                    <Text style={styles.phaseTwoFaultMeta}>
+                      {fault.workOrder ? `${fault.workOrder.code} · ${fault.workOrder.status}` : 'İş emri bekliyor'}
+                    </Text>
+                  </View>
+                  {fault.photo ? (
+                    <Image source={{ uri: fault.photo }} style={styles.phaseTwoFaultPhoto} resizeMode="cover" />
+                  ) : fault.hasPhoto ? (
+                    <Text style={styles.phaseTwoFaultPhotoMeta}>Fotoğraf eklendi</Text>
+                  ) : null}
                 </View>
               ))}
             </Card>
@@ -290,6 +336,18 @@ export function MachineDetailScreen({ machine, user, onClose, onChanged, onDelet
           </View>
         </View>
       </ScrollView>
+
+      <FaultReportModal
+        visible={faultFormVisible}
+        machine={current}
+        user={user}
+        onClose={() => setFaultFormVisible(false)}
+        onReported={(fault) => {
+          setFaultFormVisible(false);
+          setActionMessage(`${fault.code} numaralı arıza bildirimi oluşturuldu.`);
+          void load();
+        }}
+      />
 
       <MachineFormModal
         visible={formVisible}
@@ -323,6 +381,7 @@ const styles = StyleSheet.create({
   mainColumn: { flexGrow: 1, flexBasis: '58%', minWidth: 300, gap: spacing.lg },
   sideColumn: { flexGrow: 1, flexBasis: '36%', minWidth: 280, gap: spacing.lg },
   recordCard: { gap: spacing.sm },
+  legacyDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: spacing.sm },
   cardDescription: { ...typography.body, color: colors.inkMuted, marginBottom: spacing.md },
   actionMessage: { ...typography.caption, color: colors.primaryDark, backgroundColor: colors.primarySoft, borderRadius: radius.sm, padding: spacing.md },
   count: { ...typography.caption, color: colors.inkMuted },
@@ -336,6 +395,16 @@ const styles = StyleSheet.create({
   recordDate: { ...typography.caption, color: colors.inkMuted },
   recordDescription: { ...typography.body, color: colors.inkMuted },
   recordSeverity: { ...typography.caption, color: colors.ink, fontWeight: '700' },
+  phaseTwoFaultItem: { gap: 5, paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  phaseTwoFaultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  phaseTwoFaultCode: { ...typography.caption, color: colors.primaryDark, fontWeight: '800' },
+  phaseTwoFaultUrgency: { ...typography.caption, color: colors.danger, fontWeight: '800' },
+  phaseTwoFaultTitle: { ...typography.subheading, color: colors.ink },
+  phaseTwoFaultDescription: { ...typography.body, color: colors.inkMuted },
+  phaseTwoFaultMetaRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+  phaseTwoFaultMeta: { ...typography.caption, color: colors.inkMuted },
+  phaseTwoFaultPhoto: { width: '100%', height: 160, borderRadius: radius.md, marginTop: spacing.sm, backgroundColor: colors.neutralSoft },
+  phaseTwoFaultPhotoMeta: { ...typography.caption, color: colors.primaryDark, backgroundColor: colors.primarySoft, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, marginTop: spacing.sm },
   qrCard: { alignItems: 'stretch', gap: spacing.md },
   qrTitle: { ...typography.heading, color: colors.ink, textAlign: 'center' },
   qrFrame: { alignSelf: 'center', padding: spacing.md, backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },

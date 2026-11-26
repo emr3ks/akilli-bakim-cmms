@@ -41,6 +41,7 @@ export function Button({
   loading = false,
   compact = false,
   accessibilityLabel,
+  testID,
   style,
 }: {
   title: string;
@@ -50,6 +51,7 @@ export function Button({
   loading?: boolean;
   compact?: boolean;
   accessibilityLabel?: string;
+  testID?: string;
   style?: ViewStyle;
 }) {
   const palette = {
@@ -63,6 +65,7 @@ export function Button({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel || title}
+      testID={testID}
       disabled={disabled || loading}
       onPress={onPress}
       style={({ pressed }) => [
@@ -80,8 +83,8 @@ export function Button({
   );
 }
 
-export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
-  return <View style={[styles.card, style]}>{children}</View>;
+export function Card({ children, style, testID }: { children: ReactNode; style?: ViewStyle; testID?: string }) {
+  return <View style={[styles.card, style]} testID={testID}>{children}</View>;
 }
 
 export function SectionTitle({ title, action }: { title: string; action?: ReactNode }) {

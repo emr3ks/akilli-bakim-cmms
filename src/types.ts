@@ -2,6 +2,21 @@ export type Role = 'admin' | 'technician' | 'operator';
 export type Criticality = 'high' | 'medium' | 'low';
 export type MachineStatus = 'running' | 'maintenance' | 'faulted' | 'stopped';
 export type RecordType = 'maintenance' | 'fault';
+export type FaultCategory =
+  | 'mechanical'
+  | 'electrical'
+  | 'pneumatic_hydraulic'
+  | 'software_sensor'
+  | 'other';
+export type FaultUrgency = 'critical' | 'high' | 'medium' | 'low';
+export type FaultStatus = 'open' | 'resolved';
+export type WorkOrderStatus =
+  | 'open'
+  | 'assigned'
+  | 'in_progress'
+  | 'waiting_parts'
+  | 'resolved'
+  | 'closed';
 
 export interface User {
   id: number;
@@ -43,6 +58,8 @@ export interface DashboardSummary {
   maintenance: number;
   faulted: number;
   stopped: number;
+  openFaults: number;
+  activeWorkOrders: number;
 }
 
 export interface MachineRecord {
@@ -60,6 +77,124 @@ export interface MachineFilters {
   line?: string;
   status?: MachineStatus | '';
   criticality?: Criticality | '';
+}
+
+export interface Fault {
+  id: number;
+  code: string;
+  machineId: number;
+  machine: {
+    id: number;
+    code: string;
+    name: string;
+    line: string;
+    status: MachineStatus;
+  };
+  title: string;
+  category: FaultCategory;
+  urgency: FaultUrgency;
+  description: string;
+  photo: string | null;
+  photoBase64: string | null;
+  photoMimeType: string | null;
+  hasPhoto: boolean;
+  status: FaultStatus;
+  reportedBy: {
+    id: number;
+    name: string;
+    initials: string;
+  };
+  reportedById: number;
+  createdBy: number;
+  workOrder: {
+    id: number;
+    code: string;
+    status: WorkOrderStatus;
+    assignedTo: number | null;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FaultInput {
+  title: string;
+  category: FaultCategory;
+  urgency: FaultUrgency;
+  description: string;
+  photoBase64?: string | null;
+  photoMimeType?: string | null;
+}
+
+export interface FaultFilters {
+  status?: FaultStatus | '';
+  urgency?: FaultUrgency | '';
+  assignedTo?: number | '';
+  machineId?: number | '';
+  q?: string;
+}
+
+export interface FaultSummary {
+  id: number;
+  code: string;
+  title: string;
+  category: FaultCategory;
+  urgency: FaultUrgency;
+  description: string;
+  photo: string | null;
+  photoBase64: string | null;
+  photoMimeType: string | null;
+  hasPhoto: boolean;
+  status: FaultStatus;
+}
+
+export interface WorkOrder {
+  id: number;
+  code: string;
+  faultId: number;
+  fault: FaultSummary;
+  machine: Fault['machine'];
+  assignedTo: {
+    id: number;
+    name: string;
+    initials: string;
+  } | null;
+  assignedToId: number | null;
+  technicianId: number | null;
+  status: WorkOrderStatus;
+  interventionNote: string | null;
+  rootCause: string | null;
+  durationMinutes: number | null;
+  solutionPhoto: string | null;
+  solutionPhotoBase64: string | null;
+  solutionPhotoMimeType: string | null;
+  hasSolutionPhoto: boolean;
+  createdBy: number;
+  createdByUser: {
+    id: number;
+    name: string;
+    initials: string;
+  };
+  assignedAt: string | null;
+  startedAt: string | null;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkOrderFilters {
+  status?: WorkOrderStatus | '';
+  urgency?: FaultUrgency | '';
+  assignedTo?: number | '';
+  machineId?: number | '';
+  faultId?: number | '';
+}
+
+export interface WorkOrderCompletionInput {
+  interventionNote: string;
+  rootCause: string;
+  durationMinutes: number;
+  solutionPhotoBase64?: string | null;
+  solutionPhotoMimeType?: string | null;
 }
 
 export interface ApiErrorShape {

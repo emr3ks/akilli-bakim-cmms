@@ -1,11 +1,18 @@
 import type {
   DashboardSummary,
+  Fault,
+  FaultFilters,
+  FaultInput,
   Machine,
   MachineFilters,
   MachineInput,
   MachineRecord,
   RecordType,
   User,
+  WorkOrder,
+  WorkOrderCompletionInput,
+  WorkOrderFilters,
+  WorkOrderStatus,
 } from './types';
 
 const configuredBaseUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
@@ -73,6 +80,28 @@ function toQuery(filters: MachineFilters): string {
   return query ? `?${query}` : '';
 }
 
+function toFaultQuery(filters: FaultFilters): string {
+  const params = new URLSearchParams();
+  if (filters.status) params.set('status', filters.status);
+  if (filters.urgency) params.set('urgency', filters.urgency);
+  if (filters.assignedTo) params.set('assignedTo', String(filters.assignedTo));
+  if (filters.machineId) params.set('machineId', String(filters.machineId));
+  if (filters.q?.trim()) params.set('q', filters.q.trim());
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+function toWorkOrderQuery(filters: WorkOrderFilters): string {
+  const params = new URLSearchParams();
+  if (filters.status) params.set('status', filters.status);
+  if (filters.urgency) params.set('urgency', filters.urgency);
+  if (filters.assignedTo) params.set('assignedTo', String(filters.assignedTo));
+  if (filters.machineId) params.set('machineId', String(filters.machineId));
+  if (filters.faultId) params.set('faultId', String(filters.faultId));
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
 export const api = {
   getDemoUsers: () => request<{ users: User[] }>('/auth/demo-users'),
   login: (userId: number) => request<{ user: User }>('/auth/login', { method: 'POST', body: { userId } }),
@@ -113,6 +142,43 @@ export const api = {
     request<{ record: MachineRecord }>(`/machines/${machineId}/fault-records`, {
       method: 'POST',
       body,
+      userId,
+    }),
+  getFaults: (userId: number, filters: FaultFilters = {}) =>
+    request<{ faults: Fault[] }>(`/faults${toFaultQuery(filters)}`, { userId }),
+  getFault: (userId: number, id: number) =>
+    request<{ fault: Fault }>(`/faults/${id}`, { userId }),
+  createFault: (userId: number, machineId: number, body: FaultInput) =>
+    request<{ fault: Fault }>(`/machines/${machineId}/faults`, {
+      method: 'POST',
+      body,
+      userId,
+    }),
+  getWorkOrders: (userId: number, filters: WorkOrderFilters = {}) =>
+    request<{ workOrders: WorkOrder[] }>(`/work-orders${toWorkOrderQuery(filters)}`, { userId }),
+  getWorkOrder: (userId: number, id: number) =>
+    request<{ workOrder: WorkOrder }>(`/work-orders/${id}`, { userId }),
+  createWorkOrder: (userId: number, faultId: number, assignedTo?: number | null) =>
+    request<{ workOrder: WorkOrder }>('/work-orders', {
+      method: 'POST',
+      body: { faultId, ...(assignedTo ? { assignedTo } : {}) },
+      userId,
+    }),
+  assignWorkOrder: (userId: number, id: number, assignedTo: number) =>
+    request<{ workOrder: WorkOrder }>(`/work-orders/${id}/assign`, {
+      method: 'POST',
+      body: { assignedTo },
+      userId,
+    }),
+  updateWorkOrderStatus: (
+    userId: number,
+    id: number,
+    status: WorkOrderStatus,
+    completion?: WorkOrderCompletionInput,
+  ) =>
+    request<{ workOrder: WorkOrder }>(`/work-orders/${id}/status`, {
+      method: 'PATCH',
+      body: { status, ...(completion ?? {}) },
       userId,
     }),
 };

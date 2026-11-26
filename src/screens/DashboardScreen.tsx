@@ -27,6 +27,7 @@ interface DashboardScreenProps {
   onOpenMachine: (machine: Machine) => void;
   onOpenInventory: () => void;
   onOpenScanner: () => void;
+  onOpenWorkOrders: () => void;
 }
 
 const summaryItems: { key: keyof DashboardSummary; label: string; icon: string; color: string; background: string }[] = [
@@ -34,9 +35,11 @@ const summaryItems: { key: keyof DashboardSummary; label: string; icon: string; 
   { key: 'running', label: 'Çalışıyor', icon: '✓', color: colors.success, background: colors.successSoft },
   { key: 'maintenance', label: 'Bakımda', icon: '◐', color: colors.warning, background: colors.warningSoft },
   { key: 'faulted', label: 'Arızalı', icon: '!', color: colors.danger, background: colors.dangerSoft },
+  { key: 'openFaults', label: 'Açık arızalar', icon: '⚑', color: colors.danger, background: colors.dangerSoft },
+  { key: 'activeWorkOrders', label: 'Aktif iş emirleri', icon: '⚙', color: colors.primaryDark, background: colors.primarySoft },
 ];
 
-export function DashboardScreen({ user, onOpenMachine, onOpenInventory, onOpenScanner }: DashboardScreenProps) {
+export function DashboardScreen({ user, onOpenMachine, onOpenInventory, onOpenScanner, onOpenWorkOrders }: DashboardScreenProps) {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,6 +100,9 @@ export function DashboardScreen({ user, onOpenMachine, onOpenInventory, onOpenSc
       <View style={styles.quickActions}>
         <Button title="QR okut" onPress={onOpenScanner} compact style={styles.quickAction} />
         <Button title="Makine envanteri" onPress={onOpenInventory} variant="secondary" compact style={styles.quickAction} />
+        {user.role !== 'operator' ? (
+          <Button title="Arıza / iş emirleri" onPress={onOpenWorkOrders} variant="danger" compact style={styles.quickAction} />
+        ) : null}
       </View>
 
       <View>
