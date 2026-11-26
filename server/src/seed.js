@@ -1,4 +1,5 @@
 import { run, transaction } from './db.js';
+import { addUtcDays, todayPlantDate } from './utils/date-only.js';
 
 export const DEMO_USERS = [
   {
@@ -215,13 +216,108 @@ export const DEMO_WORK_ORDERS = [
   },
 ];
 
+export const DEMO_PREVENTIVE_PLANS = [
+  {
+    code: 'PB-2026-001',
+    machineCode: 'MCH-2026-001',
+    name: 'CNC spindle yağlama ve kontrolü',
+    frequency: 'weekly',
+    assignedTo: 2,
+    dueOffsetDays: -3,
+    checklist: [
+      { title: 'Spindle yağ seviyesini kontrol et', measurementLabel: 'Yağ seviyesi (%)' },
+      { title: 'Spindle titreşim seviyesini ölç', measurementLabel: 'Titreşim (mm/s)' },
+      { title: 'Soğutma ve yağ kaçağını kontrol et' },
+    ],
+  },
+  {
+    code: 'PB-2026-002',
+    machineCode: 'MCH-2026-002',
+    name: 'Hidrolik pres yağ ve filtre bakımı',
+    frequency: 'monthly',
+    assignedTo: 2,
+    dueOffsetDays: 0,
+    checklist: [
+      { title: 'Hidrolik yağ seviyesini kontrol et', measurementLabel: 'Yağ seviyesi (%)' },
+      { title: 'Filtre tıkanıklık göstergesini kontrol et' },
+      { title: 'Pres kaçaklarını ve hortum bağlantılarını incele' },
+    ],
+  },
+  {
+    code: 'PB-2026-003',
+    machineCode: 'MCH-2026-003',
+    name: 'Hava kompresörü güvenlik ve yağ bakımı',
+    frequency: 'quarterly',
+    assignedTo: 2,
+    dueOffsetDays: 4,
+    checklist: [
+      { title: 'Kompresör yağ basıncını ölç', measurementLabel: 'Yağ basıncı (bar)' },
+      { title: 'Emniyet valfi fonksiyonunu test et' },
+      { title: 'Motor titreşimini ölç', measurementLabel: 'Titreşim (mm/s)' },
+      { title: 'Hava kaçağını kontrol et' },
+    ],
+  },
+  {
+    code: 'PB-2026-004',
+    machineCode: 'MCH-2026-004',
+    name: 'Paketleme hattı sensör ve mekanik kontrolü',
+    frequency: 'semiannual',
+    assignedTo: 2,
+    dueOffsetDays: 21,
+    checklist: [
+      { title: 'Ürün sayacı sensörlerini test et' },
+      { title: 'Konveyör gerginliğini kontrol et' },
+      { title: 'Elektrik panosunda termal kontrol yap' },
+      { title: 'Güvenlik sensörlerini doğrula' },
+    ],
+  },
+  {
+    code: 'PB-2026-005',
+    machineCode: 'MCH-2026-005',
+    name: 'Buhar kazanı yıllık güvenlik bakımı',
+    frequency: 'annual',
+    assignedTo: 2,
+    dueOffsetDays: 90,
+    checklist: [
+      { title: 'Su arıtma değerlerini ölç', measurementLabel: 'Kireç sertliği (ppm)' },
+      { title: 'Emniyet valfini kalibrasyon cihazıyla test et' },
+      { title: 'Yanmaç ve ateşleyici fonksiyonunu kontrol et' },
+      { title: 'Buhar kaçağını ve manometreleri incele' },
+    ],
+  },
+  {
+    code: 'PB-2026-006',
+    machineCode: 'MCH-2026-006',
+    name: 'Paletleme konveyörü çalışma saati bakımı',
+    frequency: 'working_hours',
+    assignedTo: 2,
+    dueOffsetDays: 2,
+    intervalHours: 160,
+    runtimeHours: 1200,
+    checklist: [
+      { title: 'Taşıma motoru yağını kontrol et' },
+      { title: 'Rulman sıcaklığını ölç', measurementLabel: 'Sıcaklık (°C)' },
+      { title: 'Emniyet switchlerini test et' },
+    ],
+  },
+];
+
 export async function resetDatabase(database) {
+  await run(database, 'DELETE FROM maintenance_execution_items');
+  await run(database, 'DELETE FROM maintenance_occurrence_keys');
+  await run(database, 'DELETE FROM maintenance_executions');
+  await run(database, 'DELETE FROM maintenance_checklist_items');
+  await run(database, 'DELETE FROM maintenance_plans');
   await run(database, 'DELETE FROM work_orders');
   await run(database, 'DELETE FROM faults');
   await run(database, 'DELETE FROM maintenance_records');
+  await run(database, 'DELETE FROM maintenance_runtime_readings');
   await run(database, 'DELETE FROM machines');
   await run(database, 'DELETE FROM users');
-  await run(database, "DELETE FROM sqlite_sequence WHERE name IN ('work_orders', 'faults', 'maintenance_records', 'machines', 'users')");
+  await run(
+    database,
+    "DELETE FROM sqlite_sequence WHERE name IN ('maintenance_execution_items', 'maintenance_executions', 'maintenance_checklist_items', 'maintenance_plans', 'work_orders', 'faults', 'maintenance_records', 'machines', 'users')",
+  );
 }
 
 /** Reset and populate the database with deterministic demo data. */
@@ -311,6 +407,53 @@ export async function seedDemoData(database) {
         ],
       );
     }
+
+    const demoToday = todayPlantDate();
+    for (const plan of DEMO_PREVENTIVE_PLANS) {
+      const nextDueDate = addUtcDays(demoToday, plan.dueOffsetDays);
+      const result = await run(
+        database,
+        `INSERT INTO maintenance_plans
+          (code, machine_id, name, frequency, assigned_to, next_due_date,
+           next_due_runtime_hours, interval_hours, last_completed_at, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          plan.code,
+          machineIds.get(plan.machineCode),
+          plan.name,
+          plan.frequency,
+          plan.assignedTo,
+          nextDueDate,
+          plan.frequency === 'working_hours'
+            ? plan.runtimeHours + plan.intervalHours
+            : null,
+          plan.frequency === 'working_hours' ? plan.intervalHours : null,
+          null,
+          1,
+          timestamp,
+          timestamp,
+        ],
+      );
+
+      for (const [index, item] of plan.checklist.entries()) {
+        await run(
+          database,
+          `INSERT INTO maintenance_checklist_items (plan_id, position, title, measurement_label)
+           VALUES (?, ?, ?, ?)`,
+          [result.lastID, index + 1, item.title, item.measurementLabel ?? null],
+        );
+      }
+
+      if (plan.frequency === 'working_hours') {
+        await run(
+          database,
+          `INSERT INTO maintenance_runtime_readings
+            (machine_id, runtime_hours, reported_at, reported_by)
+           VALUES (?, ?, ?, ?)`,
+          [machineIds.get(plan.machineCode), plan.runtimeHours, timestamp, plan.assignedTo],
+        );
+      }
+    }
   });
 
   return {
@@ -318,5 +461,10 @@ export async function seedDemoData(database) {
     machines: DEMO_MACHINES.length,
     faults: DEMO_FAULTS.length,
     workOrders: DEMO_WORK_ORDERS.length,
+    preventivePlans: DEMO_PREVENTIVE_PLANS.length,
+    checklistItems: DEMO_PREVENTIVE_PLANS.reduce(
+      (total, plan) => total + plan.checklist.length,
+      0,
+    ),
   };
 }

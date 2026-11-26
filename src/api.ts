@@ -7,6 +7,11 @@ import type {
   MachineFilters,
   MachineInput,
   MachineRecord,
+  PreventiveCompletion,
+  PreventiveCompletionInput,
+  PreventivePlan,
+  PreventivePlanFilters,
+  PreventivePlanInput,
   RecordType,
   User,
   WorkOrder,
@@ -102,6 +107,14 @@ function toWorkOrderQuery(filters: WorkOrderFilters): string {
   return query ? `?${query}` : '';
 }
 
+function toPreventivePlanQuery(filters: PreventivePlanFilters): string {
+  const params = new URLSearchParams();
+  if (filters.machineId) params.set('machineId', String(filters.machineId));
+  if (filters.assignedTo) params.set('assignedTo', String(filters.assignedTo));
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
 export const api = {
   getDemoUsers: () => request<{ users: User[] }>('/auth/demo-users'),
   login: (userId: number) => request<{ user: User }>('/auth/login', { method: 'POST', body: { userId } }),
@@ -181,4 +194,28 @@ export const api = {
       body: { status, ...(completion ?? {}) },
       userId,
     }),
+  getPreventivePlans: (userId: number, filters: PreventivePlanFilters = {}) =>
+    request<{ plans: PreventivePlan[] }>(`/preventive-plans${toPreventivePlanQuery(filters)}`, { userId }),
+  getPreventivePlan: (userId: number, id: number) =>
+    request<{ plan: PreventivePlan }>(`/preventive-plans/${id}`, { userId }),
+  createPreventivePlan: (userId: number, plan: PreventivePlanInput) =>
+    request<{ plan: PreventivePlan }>('/preventive-plans', {
+      method: 'POST',
+      body: plan,
+      userId,
+    }),
+  reportPreventiveRuntime: (userId: number, id: number, runtimeHours: number) =>
+    request<{ plan: PreventivePlan }>(`/preventive-plans/${id}/runtime`, {
+      method: 'POST',
+      body: { runtimeHours },
+      userId,
+    }),
+  completePreventivePlan: (userId: number, id: number, completion: PreventiveCompletionInput) =>
+    request<{ completion: PreventiveCompletion; plan: PreventivePlan }>(`/preventive-plans/${id}/complete`, {
+      method: 'POST',
+      body: completion,
+      userId,
+    }),
+  getPreventiveCompletions: (userId: number, id: number) =>
+    request<{ completions: PreventiveCompletion[] }>(`/preventive-plans/${id}/completions`, { userId }),
 };
