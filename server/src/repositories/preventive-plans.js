@@ -22,7 +22,17 @@ const PLAN_SELECT = `
     m.line AS machine_line,
     m.status AS machine_status,
     technician.name AS technician_name,
-    technician.initials AS technician_initials
+    technician.initials AS technician_initials,
+    (
+      SELECT COUNT(*)
+      FROM stock_usages su
+      WHERE su.preventive_plan_id = p.id AND su.returned_at IS NULL
+    ) AS spare_part_count,
+    (
+      SELECT COALESCE(SUM(su.quantity * su.unit_cost), 0)
+      FROM stock_usages su
+      WHERE su.preventive_plan_id = p.id AND su.returned_at IS NULL
+    ) AS spare_part_cost
   FROM maintenance_plans p
   JOIN machines m ON m.id = p.machine_id
   LEFT JOIN users technician ON technician.id = p.assigned_to
@@ -104,6 +114,8 @@ export function mapPreventivePlan(row, checklistItems = []) {
       currentRuntimeHours: row.current_runtime_hours ?? null,
     }),
     lastCompletedAt: row.last_completed_at ?? null,
+    sparePartCount: Number(row.spare_part_count || 0),
+    sparePartCost: Number(row.spare_part_cost || 0),
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

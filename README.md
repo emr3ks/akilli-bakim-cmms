@@ -2,7 +2,7 @@
 
 Endüstriyel tesisler için makine envanteri, QR kodla makine erişimi, periyodik bakım planlama, bakım/arıza kayıtları ve rol bazlı çalışma akışları sunan mobil öncelikli CMMS uygulaması.
 
-Faz 1–3 kapsamında Expo tabanlı iOS/Android/Web arayüzü, Express REST API, kalıcı SQLite veritabanı ve otomatik backend testleri bulunur.
+Faz 1–4 kapsamında Expo tabanlı iOS/Android/Web arayüzü, Express REST API, kalıcı SQLite veritabanı ve otomatik backend testleri bulunur.
 
 ## Özellikler
 
@@ -24,8 +24,13 @@ Faz 1–3 kapsamında Expo tabanlı iOS/Android/Web arayüzü, Express REST API,
 - **Kontrol listesi icrası:** Teknisyen her kontrol maddesini işaretler, ölçüm/not girer; tüm maddeler tamamlandığında sonraki bakım tarihi otomatik hesaplanır.
 - **Bakım geçmişi:** Tamamlanan kontrol sonuçları, ölçümler, notlar ve yeni tarih plan bazında kayıt altına alınır.
 - **Faz 3 dashboard sayaçları:** Yaklaşan, bugünkü ve geciken periyodik bakım sayıları ana özet panelinde gösterilir.
+- **Yedek parça kataloğu:** `YDK-YYYY-NNN` kodlu parçalarda kategori, uyumlu makine, birim, mevcut/minimum stok, konum ve birim maliyet alanlarıyla CRUD, arama ve filtreleme.
+- **Stok kontrollü parça kullanımı:** Açık iş emri veya periyodik bakım planına parça eklenirken stoktan otomatik düşüm, miktar düzeltme ve silmede otomatik iade uygulanır.
+- **İş emri parça maliyeti:** Kullanılan parçaların miktar ve birim maliyetleri iş emri toplamında izlenir.
+- **Stok hareket defteri:** Stok girişi, iş emri kullanımı ve iade hareketleri tarih, miktar, kullanıcı ve kayıt bağlantısıyla saklanır.
+- **Kritik stok uyarıları:** Kritik seviye ve tükenen parçalar ayrı uyarı görünümünde vurgulanır; dashboard kritik parça sayısını gösterir.
 - **Meknivo marka kimliği:** Resmi SVG varlıkları giriş, üst navigasyon, yükleme ekranı, makine kartı ve yazdırılabilir QR kimlik kartında kullanılır.
-- **Demo verileri:** Gerçekçi endüstriyel makineler, 3 farklı rolde kullanıcı, farklı aşamalarda arıza/iş emri ve altı periyodik bakım planı.
+- **Demo verileri:** Gerçekçi endüstriyel makineler, 3 farklı rolde kullanıcı, farklı aşamalarda arıza/iş emri, altı periyodik bakım planı, sekiz yedek parça ve örnek stok hareketleri.
 
 ## Teknoloji
 
@@ -57,7 +62,7 @@ npm install
 npm run demo
 ```
 
-Bu komut demo kullanıcılarını ve endüstriyel makine örneklerini yerel SQLite veritabanına yeniden yükler.
+Bu komut demo kullanıcılarını, endüstriyel makine ve yedek parça örneklerini, iş emri/bakım kayıtlarını ve stok hareketlerini yerel SQLite veritabanına yeniden yükler.
 
 ### 2. API sunucusunu başlatın
 
@@ -97,8 +102,8 @@ Giriş ekranındaki **Hızlı Demo Giriş** düğmeleri ilgili rolle doğrudan o
 
 | Rol | Kullanıcı | Yetki özeti |
 | --- | --- | --- |
-| Bakım Yöneticisi | Adın Yönetici | Makine CRUD, QR, periyodik plan oluşturma, bakım/arıza, dashboard |
-| Bakım Teknisyeni | Deniz Teknisyen | Makine görüntüleme, QR okutma, atanan periyodik planları ve bakım/arıza kaydı |
+| Bakım Yöneticisi | Adın Yönetici | Makine CRUD, QR, periyodik plan, yedek parça CRUD/stok girişi, bakım/arıza, dashboard |
+| Bakım Teknisyeni | Deniz Teknisyen | Makine görüntüleme, QR okutma, atanan plan ve iş emirlerinde parça kullanımı, bakım/arıza kaydı |
 | Operatör | Elif Operatör | Makine görüntüleme, QR okutma, hızlı arıza bildirimi |
 
 ## Komutlar
@@ -114,6 +119,7 @@ Giriş ekranındaki **Hızlı Demo Giriş** düğmeleri ilgili rolle doğrudan o
 | `npm run typecheck` | Strict TypeScript kontrolünü hatasız çalıştırır |
 | `npm run build` | Expo Web üretim çıktısını `dist/` klasörüne üretir |
 | `npm run capture:ui` | API ve Expo sunucuları çalışırken gerçek tarayıcı akışlarını doğrular ve ekran görüntülerini kaydeder |
+| `npm run capture:phase4` | Çalışan Faz 4 API/Expo uygulamasından yedek parça, uyarı ve parça kullanımı ekran kanıtlarını kaydeder |
 | `npm run brand:generate` | Resmi `assets/brand/` SVG dosyalarından uygulama içi marka kaynağını yeniler |
 | `npm run check` | Lint, typecheck, test ve üretim derlemesini birlikte çalıştırır |
 
@@ -126,7 +132,15 @@ Tüm makine yazma işlemleri `x-user-id` başlığındaki kullanıcı kimliği i
 | `GET` | `/api/health` | Herkese açık |
 | `GET` | `/api/auth/demo-users` | Herkese açık |
 | `POST` | `/api/auth/login` | Herkese açık |
-| `GET` | `/api/dashboard/summary` | Oturum açmış kullanıcı; açık arıza, aktif iş emri ve periyodik bakım sayaçlarını destekler |
+| `GET` | `/api/dashboard/summary` | Oturum açmış kullanıcı; açık arıza, aktif iş emri, periyodik bakım ve kritik stok parçası sayaçlarını destekler |
+| `GET` | `/api/spare-parts` | Oturum açmış kullanıcı; `q`, `category`, `status` filtreleriyle yedek parça kataloğu |
+| `GET/POST` | `/api/spare-parts` | Okuma: herkese açık oturum; yazma: yönetici |
+| `GET/PUT/DELETE` | `/api/spare-parts/:id` | Okuma: herkese açık oturum; güncelleme/silme: yönetici |
+| `POST` | `/api/spare-parts/:id/stock-movements` | Yönetici; satın alma/stok girişi ve hareket kaydı |
+| `GET` | `/api/stock-alerts` | Oturum açmış kullanıcı; kritik ve tükenen parçalar |
+| `GET` | `/api/stock-movements` | Oturum açmış kullanıcı; tarih, miktar ve kullanıcı bilgili stok hareket defteri |
+| `GET/POST/PUT/DELETE` | `/api/work-orders/:id/parts` | Yönetici veya atanmış teknisyen; açık iş emrinde parça kullanımı, stok düşümü/iadesi ve maliyet |
+| `GET/POST/PUT/DELETE` | `/api/preventive-plans/:id/parts` | Yönetici veya atanmış teknisyen; periyodik bakımda parça kullanımı ve stok düşümü/iadesi |
 | `GET` | `/api/preventive-plans` | Yönetici tüm planları, teknisyen yalnızca kendi atamalarını görür; `machineId` ve `assignedTo` filtrelerini destekler |
 | `GET` | `/api/preventive-plans/:id` | Yönetici veya planın atanmış teknisyeni |
 | `POST` | `/api/preventive-plans` | Yönetici; makine, periyot, teknisyen ve kontrol listesiyle `PB-YYYY-NNN` planı oluşturur |
@@ -165,7 +179,16 @@ Varsayılan SQLite dosyası `server/data/cmms.sqlite` konumundadır. Alternatif 
 
 ## Görsel doğrulama
 
-Gerçek Expo Web uygulaması Edge üzerinde `390×844` mobil ve `1440×900` masaüstü görünümlerinde çalıştırılarak doğrulandı. Faz 3 için `6d95ac6` öncesi ve değişiklik sonrası karşılaştırmaları, yeni ekranların çıktıları `docs/screenshots/` klasöründe kayıtlıdır:
+Gerçek Expo Web uygulaması Edge üzerinde `390×844` mobil ve `1440×900` masaüstü görünümlerinde çalıştırılarak doğrulandı. Faz 4 için `bb52dd0` baseline sürümündeki dashboard ve iş emri ekranları ile değişiklik sonrası aynı senaryolar karşılaştırıldı; yeni yedek parça, uyarı ve parça kullanımı ekranlarının çıktıları `docs/screenshots/` klasöründe kayıtlıdır:
+
+- [Öncesi mobil dashboard](docs/screenshots/before-phase4-mobile-dashboard.png) / [Sonrası mobil dashboard](docs/screenshots/after-phase4-mobile-dashboard.png)
+- [Öncesi masaüstü dashboard](docs/screenshots/before-phase4-desktop-dashboard.png) / [Sonrası masaüstü dashboard](docs/screenshots/after-phase4-desktop-dashboard.png)
+- [Öncesi mobil iş emirleri](docs/screenshots/before-phase4-mobile-work-orders.png) / [Sonrası mobil iş emirleri](docs/screenshots/after-phase4-mobile-work-orders.png)
+- [Öncesi masaüstü iş emirleri](docs/screenshots/before-phase4-desktop-work-orders.png) / [Sonrası masaüstü iş emirleri](docs/screenshots/after-phase4-desktop-work-orders.png)
+- [Faz 4 mobil yedek parça kataloğu](docs/screenshots/after-phase4-mobile-spare-parts.png)
+- [Faz 4 mobil kritik stok uyarıları](docs/screenshots/after-phase4-mobile-stock-alerts.png)
+- [Faz 4 mobil parça kullanımı](docs/screenshots/after-phase4-mobile-part-usage.png)
+- [Faz 4 masaüstü yedek parça kataloğu](docs/screenshots/after-phase4-desktop-spare-parts.png)
 
 - [Öncesi mobil dashboard](docs/screenshots/before-mobile-dashboard.png) / [Sonrası mobil dashboard](docs/screenshots/after-mobile-dashboard.png)
 - [Öncesi Faz 3 mobil giriş](docs/screenshots/before-phase3-mobile-login.png) / [Sonrası Faz 3 mobil giriş](docs/screenshots/after-phase3-mobile-login.png)

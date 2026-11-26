@@ -13,7 +13,9 @@ import {
 } from 'react-native';
 
 import { api } from '../api';
+import { PartUsageModal } from '../components/PartUsageModal';
 import { PhotoPicker, type SelectedPhoto } from '../components/PhotoPicker';
+import { formatCurrency } from '../spareParts';
 import { colors, radius, shadow, spacing, typography } from '../theme';
 import type {
   Fault,
@@ -318,6 +320,7 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
   const [createFault, setCreateFault] = useState<Fault | null>(null);
   const [assignWorkOrder, setAssignWorkOrder] = useState<WorkOrder | null>(null);
   const [completeWorkOrder, setCompleteWorkOrder] = useState<WorkOrder | null>(null);
+  const [partsWorkOrder, setPartsWorkOrder] = useState<WorkOrder | null>(null);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -442,6 +445,8 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
   const renderWorkOrder = (workOrder: WorkOrder) => {
     const palette = statusPalette(workOrder.status);
     const canProgress = user.role === 'technician' && workOrder.assignedTo?.id === user.id;
+    const canManageParts = (user.role === 'admin' || canProgress)
+      && ['open', 'assigned', 'in_progress', 'waiting_parts'].includes(workOrder.status);
     return (
       <Card key={workOrder.id} style={styles.recordCard} testID={`work-order-${workOrder.code}`}>
         <View style={styles.cardTopRow}>
@@ -465,6 +470,16 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
           />
         </View>
         <Text style={styles.description}>{workOrder.fault.description}</Text>
+        {workOrder.sparePartCount > 0 ? (
+          <View style={styles.partsSummary}>
+            <Text style={styles.partsSummaryLabel}>
+              {workOrder.sparePartCount} parça kalemi
+            </Text>
+            <Text style={styles.partsSummaryCost}>
+              {formatCurrency(workOrder.sparePartCost)}
+            </Text>
+          </View>
+        ) : null}
         {workOrder.rootCause ? (
           <View style={styles.evidenceBox}>
             <Text style={styles.evidenceLabel}>Kök neden</Text>
@@ -478,6 +493,15 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
           <Image source={{ uri: workOrder.solutionPhoto }} style={styles.faultPhoto} resizeMode="cover" />
         ) : workOrder.hasSolutionPhoto ? (
           <Text style={styles.photoMeta}>Çözüm fotoğrafı eklendi</Text>
+        ) : null}
+        {canManageParts ? (
+          <Button
+            title="Parçaları yönet"
+            onPress={() => setPartsWorkOrder(workOrder)}
+            variant="secondary"
+            compact
+            testID={`work-order-parts-${workOrder.code}`}
+          />
         ) : null}
         {user.role === 'admin' && workOrder.status === 'open' ? (
           <Button title="Teknisyen ata" onPress={() => setAssignWorkOrder(workOrder)} compact />
@@ -620,6 +644,21 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
         onClose={() => setCompleteWorkOrder(null)}
         onSubmit={complete}
       />
+      <PartUsageModal
+        visible={Boolean(partsWorkOrder)}
+        ownerType="workOrder"
+        ownerId={partsWorkOrder?.id ?? null}
+        ownerCode={partsWorkOrder?.code ?? ''}
+        userId={user.id}
+        onClose={() => setPartsWorkOrder(null)}
+        onChanged={async () => {
+          await load(true);
+          setPartsWorkOrder((current) => {
+            if (!current) return null;
+            return workOrders.find((candidate) => candidate.id === current.id) ?? current;
+          });
+        }}
+      />
     </View>
   );
 }
@@ -653,6 +692,9 @@ const styles = StyleSheet.create({
   badge: { alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 5, borderRadius: radius.pill },
   badgeText: { ...typography.caption, fontWeight: '800' },
   description: { ...typography.body, color: colors.inkMuted },
+  partsSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, backgroundColor: colors.primarySoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  partsSummaryLabel: { ...typography.caption, color: colors.primaryDark, fontWeight: '800' },
+  partsSummaryCost: { ...typography.label, color: colors.primaryDark },
   faultPhoto: { width: '100%', height: 180, borderRadius: radius.md, backgroundColor: colors.neutralSoft },
   photoMeta: { ...typography.caption, color: colors.primaryDark, backgroundColor: colors.primarySoft, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },

@@ -32,7 +32,17 @@ const WORK_ORDER_SELECT = `
     technician.name AS technician_name,
     technician.initials AS technician_initials,
     creator.name AS creator_name,
-    creator.initials AS creator_initials
+    creator.initials AS creator_initials,
+    (
+      SELECT COUNT(*)
+      FROM stock_usages su
+      WHERE su.work_order_id = w.id AND su.returned_at IS NULL
+    ) AS spare_part_count,
+    (
+      SELECT COALESCE(SUM(su.quantity * su.unit_cost), 0)
+      FROM stock_usages su
+      WHERE su.work_order_id = w.id AND su.returned_at IS NULL
+    ) AS spare_part_cost
   FROM work_orders w
   JOIN faults f ON f.id = w.fault_id
   JOIN machines m ON m.id = f.machine_id
@@ -94,6 +104,8 @@ export function mapWorkOrder(row) {
     solutionPhotoBase64: solutionPhoto.photoBase64,
     solutionPhotoMimeType: solutionPhoto.photoMimeType,
     hasSolutionPhoto: Boolean(row.has_solution_photo ?? row.solution_photo_data),
+    sparePartCount: Number(row.spare_part_count || 0),
+    sparePartCost: Number(row.spare_part_cost || 0),
     createdBy: row.created_by,
     createdByUser: {
       id: row.created_by,

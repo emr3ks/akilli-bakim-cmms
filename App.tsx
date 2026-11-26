@@ -19,14 +19,16 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { MachineDetailScreen } from './src/screens/MachineDetailScreen';
 import { PreventiveScreen } from './src/screens/PreventiveScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
+import { SparePartsScreen } from './src/screens/SparePartsScreen';
 import { WorkOrdersScreen } from './src/screens/WorkOrdersScreen';
 
 const SESSION_KEY = 'cmms.session.v1';
-type Tab = 'dashboard' | 'inventory' | 'preventive' | 'workorders' | 'scanner';
+type Tab = 'dashboard' | 'inventory' | 'spares' | 'preventive' | 'workorders' | 'scanner';
 
 const tabs: { key: Tab; label: string; icon: string }[] = [
   { key: 'dashboard', label: 'Özet', icon: '◫' },
   { key: 'inventory', label: 'Envanter', icon: '▦' },
+  { key: 'spares', label: 'Parçalar', icon: '⬢' },
   { key: 'preventive', label: 'Bakım', icon: '↻' },
   { key: 'workorders', label: 'Arıza / İş', icon: '⚑' },
   { key: 'scanner', label: 'QR Okut', icon: '⌗' },
@@ -135,12 +137,15 @@ export default function App() {
                 user={user}
                 onOpenMachine={setSelectedMachine}
                 onOpenInventory={() => setTab('inventory')}
+                onOpenSpareParts={() => setTab('spares')}
                 onOpenScanner={() => setTab('scanner')}
                 onOpenWorkOrders={() => setTab('workorders')}
                 onOpenPreventive={() => setTab('preventive')}
               />
             ) : tab === 'inventory' ? (
               <InventoryScreen user={user} onOpenMachine={setSelectedMachine} />
+            ) : tab === 'spares' ? (
+              <SparePartsScreen user={user} />
             ) : tab === 'preventive' ? (
               <PreventiveScreen user={user} />
             ) : tab === 'workorders' ? (
@@ -153,7 +158,7 @@ export default function App() {
           {!selectedMachine ? (
             <View style={styles.bottomNav}>
               <View style={styles.navInner}>
-                {tabs.filter((item) => user.role !== 'operator' || !['workorders', 'preventive'].includes(item.key)).map((item) => {
+                {tabs.filter((item) => user.role !== 'operator' || !['workorders', 'preventive', 'spares'].includes(item.key)).map((item) => {
                   const active = tab === item.key;
                   return (
                     <Pressable
