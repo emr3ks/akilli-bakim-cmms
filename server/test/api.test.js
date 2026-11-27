@@ -43,7 +43,8 @@ describe('CMMS API', () => {
     expect(summary.body).toMatchObject({
       total: 7,
       running: 3,
-      maintenance: 2,
+      maintenance: 1,
+      warning: 1,
       faulted: 1,
       stopped: 1,
     });

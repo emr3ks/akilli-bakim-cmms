@@ -14,6 +14,7 @@ import {
   updateSparePart,
   incrementSparePartStock,
 } from '../repositories/spare-parts.js';
+import { createNotification } from './notification-service.js';
 import {
   validateSparePartPayload,
   validateStockMovementPayload,
@@ -58,6 +59,16 @@ export async function createSparePart(database, payload, user) {
       updatedAt: timestamp,
     });
 
+    if (part.currentStock <= part.minimumStock) {
+      await createNotification(database, {
+        type: 'critical_stock',
+        title: `${part.code} kritik stok seviyesinde`,
+        message: `${part.name} stokta ${part.currentStock} ${part.unit} ile minimum ${part.minimumStock} ${part.unit} eşiğinde veya altında.`,
+        severity: 'warning',
+        createdAt: timestamp,
+      });
+    }
+
     if (part.currentStock > 0) {
       await insertStockMovement(database, {
         partId: part.id,
@@ -95,6 +106,17 @@ export async function updateSparePartById(database, partId, payload, user) {
     }
 
     const updated = await updateSparePart(database, part.id, data);
+    const wasCritical = part.currentStock <= part.minimumStock;
+    const isCritical = updated.currentStock <= updated.minimumStock;
+    if (isCritical && !wasCritical) {
+      await createNotification(database, {
+        type: 'critical_stock',
+        title: `${updated.code} kritik stok seviyesine düştü`,
+        message: `${updated.name} stokta ${updated.currentStock} ${updated.unit} kaldı; minimum seviye ${updated.minimumStock} ${updated.unit}.`,
+        severity: 'warning',
+        createdAt: timestamp,
+      });
+    }
     if (stockDelta !== 0) {
       await insertStockMovement(database, {
         partId: updated.id,

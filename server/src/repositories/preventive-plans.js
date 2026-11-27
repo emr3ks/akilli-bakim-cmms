@@ -20,7 +20,13 @@ const PLAN_SELECT = `
     m.code AS machine_code,
     m.name AS machine_name,
     m.line AS machine_line,
-    m.status AS machine_status,
+    CASE
+      WHEN EXISTS (
+        SELECT 1 FROM sensor_alerts alert
+        WHERE alert.machine_id = m.id AND alert.status = 'active'
+      ) THEN 'warning'
+      ELSE m.status
+    END AS machine_status,
     technician.name AS technician_name,
     technician.initials AS technician_initials,
     (

@@ -7,6 +7,7 @@ const machineStatusLabels: Record<ServiceReport['machine']['status'], string> = 
   maintenance: 'Bakımda',
   faulted: 'Arızalı',
   stopped: 'Duruşta',
+  warning: 'Uyarı / Bakım Gerekli',
 };
 
 function escapeHtml(value: string | number | null | undefined): string {

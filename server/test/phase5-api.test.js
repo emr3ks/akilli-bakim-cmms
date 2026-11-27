@@ -64,9 +64,9 @@ describe('Phase 5 maintenance analytics API', () => {
     expect(Object.fromEntries(
       response.body.analytics.faultCategories.map((category) => [category.category, category.count]),
     )).toEqual({
-      mechanical: 3,
+      mechanical: 2,
       electrical: 2,
-      software_sensor: 2,
+      software_sensor: 3,
       pneumatic_hydraulic: 1,
       other: 0,
     });

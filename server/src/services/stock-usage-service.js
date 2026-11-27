@@ -16,12 +16,28 @@ import {
 } from '../repositories/spare-parts.js';
 import { getPreventivePlanOrThrow } from './preventive-plan-service.js';
 import { getWorkOrderOrThrow } from './work-order-service.js';
+import { createNotification } from './notification-service.js';
 import {
   validateStockQuantityPayload,
   validateStockUsagePayload,
 } from '../validators.js';
 
 const FINAL_WORK_ORDER_STATUSES = new Set(['resolved', 'closed']);
+
+async function notifyIfStockBecameCritical(database, before, timestamp) {
+  const after = await findSparePartById(database, before.id);
+  if (!after) return;
+  const crossedCriticalLevel = before.currentStock > before.minimumStock
+    && after.currentStock <= after.minimumStock;
+  if (!crossedCriticalLevel) return;
+  await createNotification(database, {
+    type: 'critical_stock',
+    title: `${after.code} kritik stok seviyesine düştü`,
+    message: `${after.name} stokta ${after.currentStock} ${after.unit} kaldı; minimum seviye ${after.minimumStock} ${after.unit}.`,
+    severity: 'warning',
+    createdAt: timestamp,
+  });
+}
 
 async function resolveWorkOrderContext(database, workOrderId, user) {
   const workOrder = await getWorkOrderOrThrow(database, workOrderId, user);
@@ -113,6 +129,7 @@ export async function addContextPart(database, kind, id, payload, user) {
         },
       );
     }
+    await notifyIfStockBecameCritical(database, part, timestamp);
 
     const existingUsage = context.kind === 'work_order'
       ? await findActiveUsageByPartAndWorkOrder(database, part.id, context.workOrderId)
@@ -196,6 +213,7 @@ export async function updateContextPart(database, kind, id, usageId, payload, us
           },
         );
       }
+      await notifyIfStockBecameCritical(database, part, timestamp);
     } else if (delta < 0) {
       await incrementSparePartStock(database, part.id, Math.abs(delta), timestamp);
     }

@@ -53,7 +53,7 @@ export function MachineFormModal({
       model: machine.model,
       serialNumber: machine.serialNumber,
       criticality: machine.criticality,
-      status: machine.status,
+      status: machine.persistedStatus,
     } : emptyMachine);
   }, [machine, visible]);
 

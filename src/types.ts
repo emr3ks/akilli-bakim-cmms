@@ -1,6 +1,6 @@
 export type Role = 'admin' | 'technician' | 'operator';
 export type Criticality = 'high' | 'medium' | 'low';
-export type MachineStatus = 'running' | 'maintenance' | 'faulted' | 'stopped';
+export type MachineStatus = 'running' | 'maintenance' | 'faulted' | 'stopped' | 'warning';
 export type RecordType = 'maintenance' | 'fault';
 export type FaultCategory =
   | 'mechanical'
@@ -46,6 +46,7 @@ export interface Machine {
   serialNumber: string;
   criticality: Criticality;
   status: MachineStatus;
+  persistedStatus: Exclude<MachineStatus, 'warning'>;
   qrCode: string;
   currentRuntimeHours: number | null;
   createdAt: string;
@@ -69,6 +70,7 @@ export interface DashboardSummary {
   maintenance: number;
   faulted: number;
   stopped: number;
+  warning: number;
   openFaults: number;
   activeWorkOrders: number;
   duePreventive: number;
@@ -586,4 +588,124 @@ export interface ApiErrorShape {
     code?: string;
     details?: unknown;
   };
+}
+
+export type SensorType = 'temperature' | 'vibration' | 'runtime_hours' | 'pressure';
+export type SensorComparison = 'gt' | 'gte';
+
+export interface SensorThreshold {
+  id: number;
+  sensorType: SensorType;
+  unit: string;
+  criticalThreshold: number;
+  comparison: SensorComparison;
+  enabled: boolean;
+}
+
+export interface SensorThresholdInput {
+  sensorType: SensorType;
+  unit: string;
+  criticalThreshold: number;
+  comparison: SensorComparison;
+  enabled: boolean;
+}
+
+export interface SensorReading {
+  id: number;
+  sensorType: SensorType;
+  value: number;
+  unit: string;
+  recordedAt: string;
+  source: string;
+}
+
+export interface SensorAlert {
+  id: number;
+  sensorType: SensorType;
+  value: number;
+  thresholdValue: number;
+  status: 'active' | 'resolved';
+  faultId: number | null;
+  workOrderId: number | null;
+  workOrderCode?: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+export interface MachineSensorOverview {
+  machine: Machine;
+  thresholds: SensorThreshold[];
+  readings: SensorReading[];
+  alerts: SensorAlert[];
+}
+
+export interface SensorReadingInput {
+  sensorType: SensorType;
+  value: number;
+}
+
+export interface SensorReadingResult {
+  readings: SensorReading[];
+  alerts: SensorAlert[];
+  machine: Machine;
+  workOrder?: WorkOrder | null;
+}
+
+export type ShiftType = 'morning' | 'evening' | 'night';
+
+export interface ShiftCriticalFault {
+  id: number;
+  code: string;
+  title: string;
+  machineCode: string;
+}
+
+export interface ShiftAttentionMachine {
+  id: number;
+  code: string;
+  name: string;
+  reasons: string[];
+}
+
+export interface ShiftHandover {
+  id: number;
+  code: string;
+  shift: ShiftType;
+  shiftDate: string;
+  summary: string;
+  criticalFaults: ShiftCriticalFault[];
+  attentionMachines: ShiftAttentionMachine[];
+  notes: string;
+  createdByUser: {
+    id: number;
+    name: string;
+    initials: string;
+  };
+  createdAt: string;
+  approved: boolean;
+  canApprove: boolean;
+  approvedByUser?: {
+    id: number;
+    name: string;
+    initials: string;
+  } | null;
+  approvedAt?: string | null;
+}
+
+export interface ShiftHandoverInput {
+  shift: ShiftType;
+  summary: string;
+  notes: string;
+}
+
+export type NotificationSeverity = 'critical' | 'warning' | 'info';
+
+export interface AppNotification {
+  id: number;
+  type: string;
+  title: string;
+  message: string;
+  severity: NotificationSeverity;
+  createdAt: string;
+  isRead: boolean;
 }

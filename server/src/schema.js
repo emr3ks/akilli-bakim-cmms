@@ -9,6 +9,13 @@ CREATE TABLE IF NOT EXISTS users (
   initials TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS user_shift_assignments (
+  user_id INTEGER NOT NULL,
+  shift TEXT NOT NULL CHECK (shift IN ('morning', 'evening', 'night')),
+  PRIMARY KEY (user_id, shift),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS spare_parts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   code TEXT NOT NULL UNIQUE,
@@ -213,6 +220,101 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_usages_active_work_order_part
 CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_usages_active_preventive_part
   ON stock_usages(part_id, preventive_plan_id) WHERE preventive_plan_id IS NOT NULL AND returned_at IS NULL;
 
+CREATE TABLE IF NOT EXISTS sensor_thresholds (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  machine_id INTEGER NOT NULL,
+  sensor_type TEXT NOT NULL CHECK (sensor_type IN ('temperature', 'vibration', 'runtime_hours', 'pressure')),
+  unit TEXT NOT NULL,
+  critical_threshold REAL NOT NULL CHECK (critical_threshold >= 0),
+  comparison TEXT NOT NULL CHECK (comparison IN ('gt', 'gte')),
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+  UNIQUE (machine_id, sensor_type)
+);
+
+CREATE TABLE IF NOT EXISTS sensor_readings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  machine_id INTEGER NOT NULL,
+  sensor_type TEXT NOT NULL CHECK (sensor_type IN ('temperature', 'vibration', 'runtime_hours', 'pressure')),
+  value REAL NOT NULL CHECK (value >= 0),
+  unit TEXT NOT NULL,
+  source TEXT,
+  recorded_by INTEGER NOT NULL,
+  recorded_at TEXT NOT NULL,
+  FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+  FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS sensor_alerts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  machine_id INTEGER NOT NULL,
+  sensor_type TEXT NOT NULL CHECK (sensor_type IN ('temperature', 'vibration', 'runtime_hours', 'pressure')),
+  value REAL NOT NULL CHECK (value >= 0),
+  threshold_value REAL NOT NULL CHECK (threshold_value >= 0),
+  unit TEXT NOT NULL,
+  comparison TEXT NOT NULL CHECK (comparison IN ('gt', 'gte')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'resolved')),
+  fault_id INTEGER NOT NULL UNIQUE,
+  work_order_id INTEGER NOT NULL UNIQUE,
+  prior_machine_status TEXT NOT NULL CHECK (prior_machine_status IN ('running', 'maintenance', 'faulted', 'stopped')),
+  created_by INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  resolved_by INTEGER,
+  resolved_at TEXT,
+  FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+  FOREIGN KEY (fault_id) REFERENCES faults(id) ON DELETE CASCADE,
+  FOREIGN KEY (work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (resolved_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sensor_alerts_active_machine_sensor
+  ON sensor_alerts(machine_id, sensor_type) WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  severity TEXT NOT NULL CHECK (severity IN ('info', 'warning', 'critical')),
+  dedupe_key TEXT UNIQUE,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS notification_reads (
+  notification_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  read_at TEXT NOT NULL,
+  PRIMARY KEY (notification_id, user_id),
+  FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS shift_handovers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  shift TEXT NOT NULL CHECK (shift IN ('morning', 'evening', 'night')),
+  shift_date TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  notes TEXT,
+  critical_faults_json TEXT NOT NULL DEFAULT '[]',
+  attention_machines_json TEXT NOT NULL DEFAULT '[]',
+  created_by INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS shift_handover_approvals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  handover_id INTEGER NOT NULL UNIQUE,
+  approved_by INTEGER NOT NULL,
+  approved_at TEXT NOT NULL,
+  FOREIGN KEY (handover_id) REFERENCES shift_handovers(id) ON DELETE CASCADE,
+  FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE RESTRICT
+);
+
 CREATE INDEX IF NOT EXISTS idx_spare_parts_category ON spare_parts(category);
 CREATE INDEX IF NOT EXISTS idx_stock_usages_part ON stock_usages(part_id);
 CREATE INDEX IF NOT EXISTS idx_stock_usages_work_order ON stock_usages(work_order_id);
@@ -242,4 +344,10 @@ CREATE INDEX IF NOT EXISTS idx_faults_machine_created_at ON faults(machine_id, c
 CREATE INDEX IF NOT EXISTS idx_faults_category ON faults(category);
 CREATE INDEX IF NOT EXISTS idx_work_orders_closed ON work_orders(closed_at, id) WHERE status = 'closed';
 CREATE INDEX IF NOT EXISTS idx_stock_usages_active_work_order ON stock_usages(work_order_id) WHERE returned_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_sensor_thresholds_machine ON sensor_thresholds(machine_id);
+CREATE INDEX IF NOT EXISTS idx_sensor_readings_machine_type_recorded ON sensor_readings(machine_id, sensor_type, recorded_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_sensor_alerts_machine_status ON sensor_alerts(machine_id, status);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_notification_reads_user ON notification_reads(user_id, notification_id);
+CREATE INDEX IF NOT EXISTS idx_shift_handovers_created_at ON shift_handovers(created_at DESC, id DESC);
 `;

@@ -443,13 +443,23 @@ async function workOrderIdByCode(code) {
   return workOrder.id;
 }
 
+async function preparePredictiveWorkOrderResolution() {
+  const workOrderId = await workOrderIdByCode('IE-2026-004');
+  const reading = await request(app)
+    .post('/api/machines/6/sensor-readings')
+    .set(TECHNICIAN)
+    .send({ readings: [{ sensorType: 'temperature', value: 80 }] });
+  expect(reading.status).toBe(201);
+  return workOrderId;
+}
+
 describe('Phase 2 work-order transition matrix', () => {
   it.each([
     ['assigned to in_progress', async () => workOrderIdByCode('IE-2026-002'), 'in_progress', {}],
     ['in_progress to waiting_parts', async () => workOrderIdByCode('IE-2026-003'), 'waiting_parts', {}],
     ['waiting_parts to in_progress', async () => workOrderIdByCode('IE-2026-004'), 'in_progress', {}],
     ['in_progress to resolved', advanceWorkOrderToInProgress, 'resolved', COMPLETION],
-    ['waiting_parts to resolved', async () => workOrderIdByCode('IE-2026-004'), 'resolved', COMPLETION],
+    ['waiting_parts to resolved', preparePredictiveWorkOrderResolution, 'resolved', COMPLETION],
     ['resolved to closed', advanceWorkOrderToResolved, 'closed', {}],
   ])('allows %s', async (_label, prepare, targetStatus, body) => {
     const workOrderId = await prepare();

@@ -7,6 +7,7 @@ import {
   Text,
   TextInput,
   View,
+  type StyleProp,
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
@@ -25,6 +26,7 @@ export const statusLabels: Record<MachineStatus, string> = {
   maintenance: 'Bakımda',
   faulted: 'Arızalı',
   stopped: 'Duruşta',
+  warning: 'Uyarı / Bakım Gerekli',
 };
 
 export const criticalityLabels: Record<Criticality, string> = {
@@ -83,7 +85,7 @@ export function Button({
   );
 }
 
-export function Card({ children, style, testID }: { children: ReactNode; style?: ViewStyle; testID?: string }) {
+export function Card({ children, style, testID }: { children: ReactNode; style?: StyleProp<ViewStyle>; testID?: string }) {
   return <View style={[styles.card, style]} testID={testID}>{children}</View>;
 }
 
@@ -102,6 +104,7 @@ export function StatusBadge({ status }: { status: MachineStatus }) {
     maintenance: { background: colors.warningSoft, color: colors.warning },
     faulted: { background: colors.dangerSoft, color: colors.danger },
     stopped: { background: colors.neutralSoft, color: colors.neutral },
+    warning: { background: colors.warningSoft, color: colors.warning },
   }[status];
 
   return (

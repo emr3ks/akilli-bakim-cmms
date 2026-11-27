@@ -5,6 +5,7 @@ const DOCUMENT_SOURCES = {
   fault: { prefix: 'ARZ', table: 'faults' },
   workOrder: { prefix: 'IE', table: 'work_orders' },
   preventivePlan: { prefix: 'PB', table: 'maintenance_plans' },
+  shiftHandover: { prefix: 'DT', table: 'shift_handovers' },
 };
 
 export async function generateDocumentCode(database, kind) {

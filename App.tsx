@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
+import { api } from './src/api';
 import { colors, radius, spacing, typography } from './src/theme';
 import { MeknivoLogo } from './src/brand/MeknivoLogo';
 import type { Machine, User } from './src/types';
@@ -18,13 +19,15 @@ import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { InventoryScreen } from './src/screens/InventoryScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { MachineDetailScreen } from './src/screens/MachineDetailScreen';
+import { NotificationCenterScreen } from './src/screens/NotificationCenterScreen';
 import { PreventiveScreen } from './src/screens/PreventiveScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
+import { ShiftHandoverScreen } from './src/screens/ShiftHandoverScreen';
 import { SparePartsScreen } from './src/screens/SparePartsScreen';
 import { WorkOrdersScreen } from './src/screens/WorkOrdersScreen';
 
 const SESSION_KEY = 'cmms.session.v1';
-type Tab = 'dashboard' | 'inventory' | 'spares' | 'preventive' | 'workorders' | 'scanner' | 'analytics';
+type Tab = 'dashboard' | 'inventory' | 'spares' | 'preventive' | 'workorders' | 'handover' | 'scanner' | 'analytics';
 
 const tabs: { key: Tab; label: string; icon: string }[] = [
   { key: 'dashboard', label: 'Özet', icon: '◫' },
@@ -32,6 +35,7 @@ const tabs: { key: Tab; label: string; icon: string }[] = [
   { key: 'spares', label: 'Parçalar', icon: '⬢' },
   { key: 'preventive', label: 'Bakım', icon: '↻' },
   { key: 'workorders', label: 'Arıza / İş', icon: '⚑' },
+  { key: 'handover', label: 'Devir', icon: '⇄' },
   { key: 'scanner', label: 'QR Okut', icon: '⌗' },
   { key: 'analytics', label: 'Analitik', icon: '↗' },
 ];
@@ -41,6 +45,8 @@ export default function App() {
   const [booting, setBooting] = useState(true);
   const [tab, setTab] = useState<Tab>('dashboard');
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [notificationCenterVisible, setNotificationCenterVisible] = useState(false);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -58,6 +64,28 @@ export default function App() {
     };
     void restoreSession();
   }, []);
+
+  const handleUnreadCountChange = useCallback((count: number) => {
+    setNotificationCount(Math.max(0, count));
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setNotificationCount(0);
+      return;
+    }
+    const loadNotificationCount = async () => {
+      try {
+        const result = await api.getNotifications(user.id);
+        setNotificationCount(result.unreadCount);
+      } catch {
+        // A transient notification-count failure must not block the CMMS shell.
+      }
+    };
+    void loadNotificationCount();
+    const timer = setInterval(() => void loadNotificationCount(), 30_000);
+    return () => clearInterval(timer);
+  }, [user]);
 
   const handleLogin = async (nextUser: User) => {
     setUser(nextUser);
@@ -114,6 +142,25 @@ export default function App() {
               <Text style={styles.brandName}>Meknivo CMMS</Text>
             </View>
             <View style={styles.profileRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Bildirim merkezi"
+                testID="notification-bell"
+                onPress={() => {
+                  setSelectedMachine(null);
+                  setNotificationCenterVisible(true);
+                }}
+                style={styles.notificationButton}
+              >
+                <Text style={styles.notificationIcon}>🔔</Text>
+                {notificationCount > 0 ? (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {notificationCount > 99 ? '99+' : notificationCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </Pressable>
               <View style={styles.profileText}>
                 <Text style={styles.profileName}>{user.name}</Text>
                 <Text style={styles.profileRole}>{roleLabels[user.role]}</Text>
@@ -126,7 +173,13 @@ export default function App() {
           </View>
 
           <View style={styles.content}>
-            {selectedMachine ? (
+            {notificationCenterVisible ? (
+              <NotificationCenterScreen
+                user={user}
+                onClose={() => setNotificationCenterVisible(false)}
+                onUnreadCountChange={handleUnreadCountChange}
+              />
+            ) : selectedMachine ? (
               <MachineDetailScreen
                 machine={selectedMachine}
                 user={user}
@@ -154,12 +207,14 @@ export default function App() {
               <PreventiveScreen user={user} />
             ) : tab === 'workorders' ? (
               <WorkOrdersScreen user={user} />
+            ) : tab === 'handover' ? (
+              <ShiftHandoverScreen user={user} />
             ) : (
               <ScannerScreen user={user} onOpenMachine={setSelectedMachine} />
             )}
           </View>
 
-          {!selectedMachine ? (
+          {!selectedMachine && !notificationCenterVisible ? (
             <View style={styles.bottomNav}>
               <View style={styles.navInner}>
                 {tabs.filter((item) => (
@@ -212,6 +267,10 @@ const styles = StyleSheet.create({
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
   brandName: { ...typography.label, color: colors.primaryDark, fontSize: 13, letterSpacing: 0.4 },
   profileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  notificationButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.neutralSoft, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  notificationIcon: { fontSize: 18, lineHeight: 22 },
+  notificationBadge: { position: 'absolute', top: -4, right: -4, minWidth: 19, height: 19, borderRadius: 10, paddingHorizontal: 4, backgroundColor: colors.danger, borderWidth: 2, borderColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  notificationBadgeText: { color: colors.white, fontSize: 9, lineHeight: 12, fontWeight: '900' },
   profileText: { alignItems: 'flex-end' },
   profileName: { ...typography.label, color: colors.ink },
   profileRole: { ...typography.caption, color: colors.inkMuted, fontSize: 10 },

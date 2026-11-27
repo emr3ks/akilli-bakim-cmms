@@ -19,7 +19,13 @@ import {
   validateWorkOrderPayload,
   validateWorkOrderStatusPayload,
 } from '../validators.js';
+import {
+  findSensorAlertByWorkOrderId,
+  resolveSensorAlert,
+} from '../repositories/sensors.js';
 import { generateDocumentCode } from './document-code.js';
+import { isLatestSensorReadingAboveThreshold } from './sensor-service.js';
+import { createNotification } from './notification-service.js';
 
 const ALLOWED_TRANSITIONS = {
   open: ['assigned'],
@@ -96,6 +102,16 @@ export async function createWorkOrder(database, payload, user) {
       assignedAt: technician ? timestamp : null,
       createdAt: timestamp,
     });
+    if (technician) {
+      await createNotification(database, {
+        type: 'work_order_assignment',
+        title: `${technician.name} adına yeni iş emri`,
+        message: `${created.code} iş emri ${fault.machine.code} · ${fault.title} için ${technician.name} adına atandı.`,
+        severity: 'warning',
+        dedupeKey: `work-order-assignment:${created.id}`,
+        createdAt: timestamp,
+      });
+    }
     return findWorkOrderById(database, created.id);
   });
 }
@@ -114,10 +130,19 @@ export async function assignWorkOrder(database, workOrderId, payload) {
       );
     }
 
+    const assignedAt = new Date().toISOString();
     const updated = await updateWorkOrder(database, workOrder.id, {
       assignedTo: technician.id,
       status: 'assigned',
-      assignedAt: new Date().toISOString(),
+      assignedAt,
+    });
+    await createNotification(database, {
+      type: 'work_order_assignment',
+      title: `${technician.name} adına yeni iş emri`,
+      message: `${workOrder.code} iş emri ${workOrder.machine.code} · ${workOrder.fault.title} için ${technician.name} adına atandı.`,
+      severity: 'warning',
+      dedupeKey: `work-order-assignment:${updated.id}`,
+      createdAt: assignedAt,
     });
     return findWorkOrderById(database, updated.id);
   });
@@ -181,6 +206,24 @@ export async function updateWorkOrderStatus(database, workOrderId, payload, user
     assertValidTransition(workOrder, data.status);
     assertCanProgress(workOrder, user);
 
+    const sensorAlert = data.status === 'resolved' || data.status === 'closed'
+      ? await findSensorAlertByWorkOrderId(database, workOrder.id)
+      : null;
+    if (sensorAlert?.status === 'active') {
+      const stillAboveThreshold = await isLatestSensorReadingAboveThreshold(
+        database,
+        workOrder.machine.id,
+        sensorAlert.sensorType,
+      );
+      if (stillAboveThreshold) {
+        throw new ApiError(
+          409,
+          'The latest sensor reading is still above its critical threshold; record a reading below the threshold before resolving this work order',
+          'SENSOR_THRESHOLD_STILL_EXCEEDED',
+        );
+      }
+    }
+
     const requiresCompletion = data.status === 'resolved' || data.status === 'closed';
     const closingStatus = data.status === 'closed';
     const completion = requiresCompletion
@@ -205,6 +248,14 @@ export async function updateWorkOrderStatus(database, workOrderId, payload, user
     }
 
     const updated = await updateWorkOrder(database, workOrder.id, updates);
+    if (data.status === 'resolved' || data.status === 'closed') {
+      if (sensorAlert?.status === 'active') {
+        await resolveSensorAlert(database, sensorAlert.id, {
+          resolvedBy: user.id,
+          resolvedAt: timestamp,
+        });
+      }
+    }
     if (closingStatus) {
       await updateFaultStatus(database, workOrder.faultId, 'resolved');
       const otherCriticalFault = await hasOtherOpenCriticalFault(

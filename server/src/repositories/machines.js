@@ -9,7 +9,14 @@ const MACHINE_FIELDS = [
   'model',
   'serial_number',
   'criticality',
-  'status',
+  `CASE
+    WHEN EXISTS (
+      SELECT 1 FROM sensor_alerts sa
+      WHERE sa.machine_id = machines.id AND sa.status = 'active'
+    ) THEN 'warning'
+    ELSE machines.status
+  END AS status`,
+  'machines.status AS persisted_status',
   'qr_code',
   'created_at',
   'updated_at',
@@ -33,6 +40,7 @@ export function mapMachine(row) {
     serialNumber: row.serial_number,
     criticality: row.criticality,
     status: row.status,
+    persistedStatus: row.persisted_status,
     qrCode: row.qr_code,
     currentRuntimeHours: row.current_runtime_hours ?? null,
     createdAt: row.created_at,
@@ -60,8 +68,17 @@ export async function listMachines(database, filters = {}) {
     clauses.push('LOWER(line) = LOWER(?)');
     params.push(filters.line);
   }
-  if (filters.status) {
-    clauses.push('status = ?');
+  if (filters.status === 'warning') {
+    clauses.push(`EXISTS (
+      SELECT 1 FROM sensor_alerts filter_alert
+      WHERE filter_alert.machine_id = machines.id AND filter_alert.status = 'active'
+    )`);
+  } else if (filters.status) {
+    clauses.push('machines.status = ?');
+    clauses.push(`NOT EXISTS (
+      SELECT 1 FROM sensor_alerts filter_alert
+      WHERE filter_alert.machine_id = machines.id AND filter_alert.status = 'active'
+    )`);
     params.push(filters.status);
   }
   if (filters.criticality) {
@@ -89,6 +106,11 @@ export async function findMachineByCode(database, code) {
   if (typeof code !== 'string' || !code.trim()) return null;
   const row = await get(database, `${MACHINE_SELECT} WHERE machines.code = ?`, [code.trim().toUpperCase()]);
   return mapMachine(row);
+}
+
+export async function findPersistedMachineStatus(database, machineId) {
+  const row = await get(database, 'SELECT status FROM machines WHERE id = ?', [machineId]);
+  return row?.status ?? null;
 }
 
 export async function insertMachine(database, data) {
@@ -163,8 +185,21 @@ export async function setMachineStatus(database, machineId, status) {
 }
 
 export async function getStatusCounts(database) {
-  const rows = await all(database, 'SELECT status, COUNT(*) AS count FROM machines GROUP BY status');
-  const counts = { running: 0, maintenance: 0, faulted: 0, stopped: 0 };
+  const rows = await all(
+    database,
+    `SELECT
+      CASE
+        WHEN EXISTS (
+          SELECT 1 FROM sensor_alerts alert
+          WHERE alert.machine_id = machines.id AND alert.status = 'active'
+        ) THEN 'warning'
+        ELSE status
+      END AS status,
+      COUNT(*) AS count
+     FROM machines
+     GROUP BY 1`,
+  );
+  const counts = { running: 0, maintenance: 0, faulted: 0, stopped: 0, warning: 0 };
   for (const row of rows) {
     if (Object.prototype.hasOwnProperty.call(counts, row.status)) {
       counts[row.status] = row.count;
