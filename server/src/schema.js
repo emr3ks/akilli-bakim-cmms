@@ -238,4 +238,8 @@ CREATE INDEX IF NOT EXISTS idx_maintenance_checklist_plan ON maintenance_checkli
 CREATE INDEX IF NOT EXISTS idx_maintenance_executions_plan ON maintenance_executions(plan_id);
 CREATE INDEX IF NOT EXISTS idx_maintenance_executions_completed_at ON maintenance_executions(completed_at);
 CREATE INDEX IF NOT EXISTS idx_maintenance_execution_items_execution ON maintenance_execution_items(execution_id);
+CREATE INDEX IF NOT EXISTS idx_faults_machine_created_at ON faults(machine_id, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_faults_category ON faults(category);
+CREATE INDEX IF NOT EXISTS idx_work_orders_closed ON work_orders(closed_at, id) WHERE status = 'closed';
+CREATE INDEX IF NOT EXISTS idx_stock_usages_active_work_order ON stock_usages(work_order_id) WHERE returned_at IS NULL;
 `;

@@ -1,7 +1,9 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 
 import { BRAND_SVG } from './brand/generated-assets';
+import { printHtmlInWebBrowser } from './serviceReportPrinting';
 import { createQrDataUri } from './qr';
 import { criticalityLabels, statusLabels } from './ui';
 import type { Machine } from './types';
@@ -89,11 +91,21 @@ export function buildMachineCardHtml(machine: Machine): string {
 }
 
 export async function printMachineCard(machine: Machine): Promise<void> {
-  await Print.printAsync({ html: buildMachineCardHtml(machine) });
+  const html = buildMachineCardHtml(machine);
+  if (Platform.OS === 'web') {
+    await printHtmlInWebBrowser(html);
+    return;
+  }
+  await Print.printAsync({ html });
 }
 
 export async function exportMachineCardPdf(machine: Machine): Promise<string> {
-  const file = await Print.printToFileAsync({ html: buildMachineCardHtml(machine) });
+  const html = buildMachineCardHtml(machine);
+  if (Platform.OS === 'web') {
+    await printHtmlInWebBrowser(html);
+    return 'web-print';
+  }
+  const file = await Print.printToFileAsync({ html });
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(file.uri, {
       mimeType: 'application/pdf',

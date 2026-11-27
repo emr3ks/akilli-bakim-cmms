@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 const assetDirectory = new URL('../../assets/brand/', import.meta.url);
 const generatedAssetsUrl = new URL('../../src/brand/generated-assets.ts', import.meta.url);
 const printingUrl = new URL('../../src/printing.ts', import.meta.url);
+const serviceReportHtmlUrl = new URL('../../src/serviceReportHtml.ts', import.meta.url);
 
 describe('Meknivo official brand assets', () => {
   it('keeps the generated application source synchronized with every official SVG', () => {
@@ -26,5 +27,11 @@ describe('Meknivo official brand assets', () => {
     const printing = fs.readFileSync(printingUrl, 'utf8');
     expect(printing).toContain('BRAND_SVG.monochromeWhite');
     expect(printing).toContain('Meknivo CMMS');
+  });
+
+  it('embeds the official dark logo in printable service reports', () => {
+    const serviceReportHtml = fs.readFileSync(serviceReportHtmlUrl, 'utf8');
+    expect(serviceReportHtml).toContain('BRAND_SVG.primaryDark');
+    expect(serviceReportHtml).toContain('Meknivo CMMS');
   });
 });

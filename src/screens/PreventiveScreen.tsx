@@ -13,6 +13,8 @@ import {
 
 import { api } from '../api';
 import { PartUsageModal } from '../components/PartUsageModal';
+import { formatDate, formatDateTime, formatPlantDate } from '../format';
+import { exportServiceReportPdf, printServiceReport } from '../serviceReportPrinting';
 import { formatCurrency } from '../spareParts';
 import { colors, radius, shadow, spacing, typography } from '../theme';
 import type {
@@ -95,42 +97,8 @@ function duePalette(state: PreventiveDueState) {
   return { background: colors.neutralSoft, color: colors.inkMuted };
 }
 
-function formatDate(value: string): string {
-  try {
-    return new Intl.DateTimeFormat('tr-TR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }).format(new Date(`${value.slice(0, 10)}T12:00:00Z`));
-  } catch {
-    return value;
-  }
-}
-
-function formatDateTime(value: string): string {
-  try {
-    return new Intl.DateTimeFormat('tr-TR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(value));
-  } catch {
-    return value;
-  }
-}
-
 function defaultDueDate(): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Istanbul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  const date = new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day) + 7));
-  return date.toISOString().slice(0, 10);
+  return formatPlantDate(new Date(), 7);
 }
 
 function createOccurrenceKey(): string {
@@ -559,13 +527,23 @@ function HistoryModal({
   completions,
   visible,
   loading,
+  printingReportId,
+  exportingReportId,
+  reportError,
   onClose,
+  onPrintReport,
+  onExportReport,
 }: {
   plan: PreventivePlan | null;
   completions: PreventiveCompletion[];
   visible: boolean;
   loading: boolean;
+  printingReportId: number | null;
+  exportingReportId: number | null;
+  reportError: string | null;
   onClose: () => void;
+  onPrintReport: (completion: PreventiveCompletion) => Promise<void>;
+  onExportReport: (completion: PreventiveCompletion) => Promise<void>;
 }) {
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
@@ -580,6 +558,7 @@ function HistoryModal({
             <Button title="Kapat" onPress={onClose} variant="ghost" compact />
           </View>
           <ScrollView contentContainerStyle={styles.modalBody}>
+            {reportError ? <Text style={styles.error}>{reportError}</Text> : null}
             {loading ? <LoadingState label="Bakım geçmişi hazırlanıyor…" /> : null}
             {!loading && !completions.length ? (
               <EmptyState title="Henüz tamamlanmış bakım yok" description="İlk kontrol listesi icrası burada kaydedilecek." />
@@ -601,6 +580,26 @@ function HistoryModal({
                   </View>
                 ))}
                 <Text style={styles.nextDueText}>Sonraki bakım: {formatDate(completion.nextDueDate)}</Text>
+                <View style={styles.reportActions}>
+                  <Button
+                    title="Servis Formu Yazdır / PDF"
+                    onPress={() => void onPrintReport(completion)}
+                    loading={printingReportId === completion.id}
+                    variant="secondary"
+                    compact
+                    style={styles.reportAction}
+                    testID={`preventive-service-report-${completion.code}`}
+                  />
+                  <Button
+                    title="PDF Dosyası Paylaş"
+                    onPress={() => void onExportReport(completion)}
+                    loading={exportingReportId === completion.id}
+                    variant="ghost"
+                    compact
+                    style={styles.reportAction}
+                    testID={`preventive-service-pdf-${completion.code}`}
+                  />
+                </View>
               </Card>
             ))}
           </ScrollView>
@@ -690,6 +689,7 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sectionWarning, setSectionWarning] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [createVisible, setCreateVisible] = useState(false);
   const [completingPlan, setCompletingPlan] = useState<PreventivePlan | null>(null);
@@ -697,21 +697,41 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
   const [historyPlan, setHistoryPlan] = useState<PreventivePlan | null>(null);
   const [historyCompletions, setHistoryCompletions] = useState<PreventiveCompletion[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [printingReportId, setPrintingReportId] = useState<number | null>(null);
+  const [exportingReportId, setExportingReportId] = useState<number | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
   const [partsPlan, setPartsPlan] = useState<PreventivePlan | null>(null);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
+    setSectionWarning(null);
     try {
-      const [planResponse, machineResponse, userResponse] = await Promise.all([
+      const [planResult, machineResult, userResult] = await Promise.allSettled([
         api.getPreventivePlans(user.id),
         api.getMachines(user.id),
         api.getDemoUsers(),
       ]);
-      setPlans(planResponse.plans);
-      setMachines(machineResponse.machines);
-      setTechnicians(userResponse.users.filter((candidate) => candidate.role === 'technician'));
+
+      if (planResult.status === 'fulfilled') {
+        setPlans(planResult.value.plans);
+        setError(null);
+      } else {
+        setError(planResult.reason instanceof Error
+          ? planResult.reason.message
+          : 'Bakım planları alınamadı.');
+      }
+      setMachines(machineResult.status === 'fulfilled' ? machineResult.value.machines : []);
+      setTechnicians(userResult.status === 'fulfilled'
+        ? userResult.value.users.filter((candidate) => candidate.role === 'technician')
+        : []);
+      if (
+        (machineResult.status === 'rejected' && planResult.status === 'fulfilled')
+        || userResult.status === 'rejected'
+      ) {
+        setSectionWarning('Bazı yardımcı veriler yüklenemedi; mevcut bakım planları kullanılabilir durumda.');
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Bakım planları alınamadı.');
     } finally {
@@ -763,6 +783,48 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
       setHistoryPlan(null);
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const printServiceForm = async (completion: PreventiveCompletion) => {
+    setPrintingReportId(completion.id);
+    setActionMessage(null);
+    setReportError(null);
+    try {
+      const response = await api.getPreventiveServiceReport(
+        user.id,
+        completion.planId,
+        completion.id,
+      );
+      await printServiceReport(response.report);
+      setActionMessage(`${completion.code} servis formu yazdırılmaya hazırlandı.`);
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'Servis formu oluşturulamadı.';
+      setReportError(message);
+      setActionMessage(message);
+    } finally {
+      setPrintingReportId(null);
+    }
+  };
+
+  const exportServiceForm = async (completion: PreventiveCompletion) => {
+    setExportingReportId(completion.id);
+    setActionMessage(null);
+    setReportError(null);
+    try {
+      const response = await api.getPreventiveServiceReport(
+        user.id,
+        completion.planId,
+        completion.id,
+      );
+      const uri = await exportServiceReportPdf(response.report);
+      setActionMessage(`${completion.code} PDF servis formu hazırlandı: ${uri}`);
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'PDF servis formu oluşturulamadı.';
+      setReportError(message);
+      setActionMessage(message);
+    } finally {
+      setExportingReportId(null);
     }
   };
 
@@ -878,6 +940,7 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
         </View>
 
         {actionMessage ? <Text style={styles.actionMessage}>{actionMessage}</Text> : null}
+        {sectionWarning ? <Text style={styles.sectionWarning}>{sectionWarning}</Text> : null}
         {loading && !plans.length ? <LoadingState label="Periyodik bakım planları hazırlanıyor…" /> : null}
         {!loading && error ? <ErrorState message={error} onRetry={() => void load()} /> : null}
         {!loading && !error ? (
@@ -922,7 +985,12 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
         completions={historyCompletions}
         visible={Boolean(historyPlan)}
         loading={historyLoading}
+        printingReportId={printingReportId}
+        exportingReportId={exportingReportId}
+        reportError={reportError}
         onClose={() => setHistoryPlan(null)}
+        onPrintReport={printServiceForm}
+        onExportReport={exportServiceForm}
       />
       <PartUsageModal
         visible={Boolean(partsPlan)}
@@ -977,7 +1045,10 @@ const styles = StyleSheet.create({
   planFooterText: { ...typography.caption, color: colors.inkMuted },
   planActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   planAction: { flexGrow: 1, minWidth: 150 },
+  reportActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
+  reportAction: { flexGrow: 1, minWidth: 180 },
   actionMessage: { ...typography.caption, color: colors.primaryDark, backgroundColor: colors.primarySoft, borderRadius: radius.sm, padding: spacing.md },
+  sectionWarning: { ...typography.caption, color: colors.warning, backgroundColor: colors.warningSoft, borderRadius: radius.sm, padding: spacing.md },
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(10, 27, 51, 0.52)' },
   modalSheet: { width: '100%', maxWidth: 720, alignSelf: 'center', maxHeight: '90%', backgroundColor: colors.background, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, overflow: 'hidden', ...shadow },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md, padding: spacing.lg, backgroundColor: colors.surface },

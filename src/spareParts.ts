@@ -1,3 +1,4 @@
+import { formatDateTime, formatNumber } from './format';
 import { colors } from './theme';
 import type { SparePartCategory, SparePartStatus, SparePartUnit } from './types';
 
@@ -30,28 +31,13 @@ export function sparePartStatusPalette(status: SparePartStatus) {
 }
 
 export function formatQuantity(value: number): string {
-  return new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 3 }).format(value);
+  return formatNumber(value, 3);
 }
 
 export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('tr-TR', {
-    style: 'currency',
-    currency: 'TRY',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+  return `${formatNumber(value, 2)} ₺`;
 }
 
 export function formatMovementDate(value: string): string {
-  try {
-    return new Intl.DateTimeFormat('tr-TR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(value));
-  } catch {
-    return value;
-  }
+  return formatDateTime(value);
 }

@@ -534,7 +534,7 @@ export async function listWorkOrderStockUsages(database, workOrderId) {
   const rows = await all(
     database,
     `${STOCK_USAGE_SELECT}
-     WHERE su.work_order_id = ?
+     WHERE su.work_order_id = ? AND su.returned_at IS NULL
      ORDER BY su.created_at ASC, su.id ASC`,
     [workOrderId],
   );
@@ -545,7 +545,7 @@ export async function listPreventivePlanStockUsages(database, planId) {
   const rows = await all(
     database,
     `${STOCK_USAGE_SELECT}
-     WHERE su.preventive_plan_id = ?
+     WHERE su.preventive_plan_id = ? AND su.returned_at IS NULL
      ORDER BY su.created_at ASC, su.id ASC`,
     [planId],
   );

@@ -14,6 +14,7 @@ import { MeknivoLogo } from './src/brand/MeknivoLogo';
 import type { Machine, User } from './src/types';
 import { roleLabels } from './src/ui';
 import { DashboardScreen } from './src/screens/DashboardScreen';
+import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { InventoryScreen } from './src/screens/InventoryScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { MachineDetailScreen } from './src/screens/MachineDetailScreen';
@@ -23,7 +24,7 @@ import { SparePartsScreen } from './src/screens/SparePartsScreen';
 import { WorkOrdersScreen } from './src/screens/WorkOrdersScreen';
 
 const SESSION_KEY = 'cmms.session.v1';
-type Tab = 'dashboard' | 'inventory' | 'spares' | 'preventive' | 'workorders' | 'scanner';
+type Tab = 'dashboard' | 'inventory' | 'spares' | 'preventive' | 'workorders' | 'scanner' | 'analytics';
 
 const tabs: { key: Tab; label: string; icon: string }[] = [
   { key: 'dashboard', label: 'Özet', icon: '◫' },
@@ -32,6 +33,7 @@ const tabs: { key: Tab; label: string; icon: string }[] = [
   { key: 'preventive', label: 'Bakım', icon: '↻' },
   { key: 'workorders', label: 'Arıza / İş', icon: '⚑' },
   { key: 'scanner', label: 'QR Okut', icon: '⌗' },
+  { key: 'analytics', label: 'Analitik', icon: '↗' },
 ];
 
 export default function App() {
@@ -142,6 +144,8 @@ export default function App() {
                 onOpenWorkOrders={() => setTab('workorders')}
                 onOpenPreventive={() => setTab('preventive')}
               />
+            ) : tab === 'analytics' && user.role === 'admin' ? (
+              <AnalyticsScreen user={user} />
             ) : tab === 'inventory' ? (
               <InventoryScreen user={user} onOpenMachine={setSelectedMachine} />
             ) : tab === 'spares' ? (
@@ -158,7 +162,10 @@ export default function App() {
           {!selectedMachine ? (
             <View style={styles.bottomNav}>
               <View style={styles.navInner}>
-                {tabs.filter((item) => user.role !== 'operator' || !['workorders', 'preventive', 'spares'].includes(item.key)).map((item) => {
+                {tabs.filter((item) => (
+                  (user.role === 'admin' || item.key !== 'analytics')
+                  && (user.role !== 'operator' || !['workorders', 'preventive', 'spares', 'analytics'].includes(item.key))
+                )).map((item) => {
                   const active = tab === item.key;
                   return (
                     <Pressable
