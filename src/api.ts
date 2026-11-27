@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 
 import { apiConfigurationErrorMessage, resolveApiBaseUrl } from './apiConfiguration';
 import type {
+  AppNotification,
   DashboardSummary,
   Fault,
   FaultFilters,
@@ -12,6 +13,7 @@ import type {
   MachineInput,
   MachineMaintenanceHistory,
   MachineRecord,
+  MachineSensorOverview,
   MaintenanceAnalytics,
   PreventiveCompletion,
   PreventiveCompletionInput,
@@ -20,7 +22,12 @@ import type {
   PreventivePlanInput,
   PartUsage,
   RecordType,
+  SensorReadingInput,
+  SensorReadingResult,
+  SensorThresholdInput,
   ServiceReport,
+  ShiftHandover,
+  ShiftHandoverInput,
   SparePart,
   SparePartFilters,
   SparePartInput,
@@ -564,4 +571,45 @@ export const api = {
     }),
   getPreventiveCompletions: (userId: number, id: number) =>
     request<{ completions: PreventiveCompletion[] }>(`/preventive-plans/${id}/completions`, { userId }),
+  getMachineSensors: (userId: number, machineId: number) =>
+    request<MachineSensorOverview>(`/machines/${machineId}/sensors`, { userId }),
+  updateMachineSensorThresholds: (
+    userId: number,
+    machineId: number,
+    thresholds: SensorThresholdInput[],
+  ) => request<MachineSensorOverview>(`/machines/${machineId}/sensor-thresholds`, {
+    method: 'PUT',
+    body: { thresholds },
+    userId,
+  }),
+  createMachineSensorReadings: (
+    userId: number,
+    machineId: number,
+    readings: SensorReadingInput[],
+    source = 'simulation',
+  ) => request<SensorReadingResult>(`/machines/${machineId}/sensor-readings`, {
+    method: 'POST',
+    body: { readings, source },
+    userId,
+  }),
+  getShiftHandovers: (userId: number) =>
+    request<{ handovers: ShiftHandover[] }>('/shift-handovers', { userId }),
+  createShiftHandover: (userId: number, handover: ShiftHandoverInput) =>
+    request<{ handover: ShiftHandover }>('/shift-handovers', {
+      method: 'POST',
+      body: handover,
+      userId,
+    }),
+  approveShiftHandover: (userId: number, handoverId: number) =>
+    request<{ handover: ShiftHandover }>(`/shift-handovers/${handoverId}/approve`, {
+      method: 'POST',
+      userId,
+    }),
+  getNotifications: (userId: number) =>
+    request<{ notifications: AppNotification[]; unreadCount: number }>('/notifications', { userId }),
+  markAllNotificationsRead: (userId: number) =>
+    request<{ updated: number; unreadCount: number }>('/notifications/read-all', {
+      method: 'POST',
+      userId,
+    }),
 };

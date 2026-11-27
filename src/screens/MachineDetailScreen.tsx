@@ -13,6 +13,7 @@ import { api } from '../api';
 import { MeknivoLogo } from '../brand/MeknivoLogo';
 import { FaultReportModal } from '../components/FaultReportModal';
 import { QRCodeView } from '../components/QRCodeView';
+import { SensorPanel } from '../components/SensorPanel';
 import { formatDate, formatDateTime } from '../format';
 import { exportMachineCardPdf, printMachineCard } from '../printing';
 import { colors, radius, spacing, typography } from '../theme';
@@ -35,6 +36,7 @@ import {
   OptionPicker,
   SectionTitle,
   StatusBadge,
+  statusLabels,
 } from '../ui';
 import { MachineFormModal } from './MachineFormModal';
 
@@ -320,8 +322,17 @@ export function MachineDetailScreen({ machine, user, onClose, onChanged, onDelet
               <InfoRow label="Model" value={current.model} />
               <InfoRow label="Seri numarası" value={current.serialNumber} />
               <InfoRow label="Kritik seviye" value={current.criticality === 'high' ? 'Yüksek' : current.criticality === 'medium' ? 'Orta' : 'Düşük'} />
-              <InfoRow label="Anlık durum" value={current.status === 'running' ? 'Çalışıyor' : current.status === 'maintenance' ? 'Bakımda' : current.status === 'faulted' ? 'Arızalı' : 'Duruşta'} />
+              <InfoRow label="Anlık durum" value={statusLabels[current.status]} />
             </Card>
+
+            <SensorPanel
+              machine={current}
+              user={user}
+              onMachineUpdated={(updated) => {
+                setCurrent(updated);
+                onChanged(updated);
+              }}
+            />
 
             <Card style={styles.recordCard}>
               <SectionTitle title="Hızlı arıza bildirimi" />

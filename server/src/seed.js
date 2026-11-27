@@ -25,6 +25,15 @@ export const DEMO_USERS = [
   },
 ];
 
+export const DEMO_USER_SHIFT_ASSIGNMENTS = [
+  { userId: 1, shift: 'morning' },
+  { userId: 1, shift: 'evening' },
+  { userId: 1, shift: 'night' },
+  { userId: 2, shift: 'evening' },
+  { userId: 2, shift: 'night' },
+  { userId: 3, shift: 'morning' },
+];
+
 export const DEMO_SPARE_PARTS = [
   {
     code: 'YDK-2026-001',
@@ -297,10 +306,10 @@ export const DEMO_FAULTS = [
   {
     code: 'ARZ-2026-004',
     machineCode: 'MCH-2026-006',
-    title: 'Konveyör taşıma motoru sıcaklığı yükseldi',
-    category: 'mechanical',
-    urgency: 'low',
-    description: '4. motorun sıcaklık alarmı verdi; taşıma akışı düşük hızda sürdürülüyor.',
+    title: 'Konveyör taşıma motoru sıcaklık eşiğini aştı',
+    category: 'software_sensor',
+    urgency: 'high',
+    description: '4. motorun sıcaklık sensörü 92 °C ölçtü; kritik eşik 85 °C ve taşıma akışı düşük hızda sürdürülüyor.',
     photo: null,
     reportedBy: 3,
     status: 'open',
@@ -390,9 +399,9 @@ export const DEMO_WORK_ORDERS = [
     assignedTo: 2,
     status: 'waiting_parts',
     createdBy: 1,
-    assignedAt: '2026-11-23T10:30:00.000Z',
-    startedAt: '2026-11-23T10:45:00.000Z',
-    createdAt: '2026-11-23T10:25:00.000Z',
+    assignedAt: '2026-11-23T10:08:00.000Z',
+    startedAt: '2026-11-23T10:12:00.000Z',
+    createdAt: '2026-11-23T10:07:00.000Z',
   },
   {
     code: 'IE-2026-005',
@@ -558,7 +567,102 @@ export const DEMO_PREVENTIVE_EXECUTIONS = [
   },
 ];
 
+export const DEMO_SENSOR_THRESHOLDS = [
+  { machineCode: 'MCH-2026-001', sensorType: 'temperature', unit: '°C', criticalThreshold: 85, comparison: 'gt' },
+  { machineCode: 'MCH-2026-001', sensorType: 'vibration', unit: 'mm/s', criticalThreshold: 4.5, comparison: 'gt' },
+  { machineCode: 'MCH-2026-001', sensorType: 'runtime_hours', unit: 'h', criticalThreshold: 500, comparison: 'gte' },
+  { machineCode: 'MCH-2026-001', sensorType: 'pressure', unit: 'bar', criticalThreshold: 10, comparison: 'gt' },
+  { machineCode: 'MCH-2026-002', sensorType: 'temperature', unit: '°C', criticalThreshold: 80, comparison: 'gt' },
+  { machineCode: 'MCH-2026-002', sensorType: 'vibration', unit: 'mm/s', criticalThreshold: 5, comparison: 'gt' },
+  { machineCode: 'MCH-2026-002', sensorType: 'runtime_hours', unit: 'h', criticalThreshold: 600, comparison: 'gte' },
+  { machineCode: 'MCH-2026-002', sensorType: 'pressure', unit: 'bar', criticalThreshold: 250, comparison: 'gt' },
+  { machineCode: 'MCH-2026-003', sensorType: 'temperature', unit: '°C', criticalThreshold: 90, comparison: 'gt' },
+  { machineCode: 'MCH-2026-003', sensorType: 'vibration', unit: 'mm/s', criticalThreshold: 4.5, comparison: 'gt' },
+  { machineCode: 'MCH-2026-003', sensorType: 'runtime_hours', unit: 'h', criticalThreshold: 800, comparison: 'gte' },
+  { machineCode: 'MCH-2026-003', sensorType: 'pressure', unit: 'bar', criticalThreshold: 8, comparison: 'gt' },
+  { machineCode: 'MCH-2026-004', sensorType: 'temperature', unit: '°C', criticalThreshold: 75, comparison: 'gt' },
+  { machineCode: 'MCH-2026-004', sensorType: 'vibration', unit: 'mm/s', criticalThreshold: 3.5, comparison: 'gt' },
+  { machineCode: 'MCH-2026-004', sensorType: 'runtime_hours', unit: 'h', criticalThreshold: 400, comparison: 'gte' },
+  { machineCode: 'MCH-2026-004', sensorType: 'pressure', unit: 'bar', criticalThreshold: 6, comparison: 'gt' },
+  { machineCode: 'MCH-2026-005', sensorType: 'temperature', unit: '°C', criticalThreshold: 95, comparison: 'gt' },
+  { machineCode: 'MCH-2026-005', sensorType: 'vibration', unit: 'mm/s', criticalThreshold: 4.5, comparison: 'gt' },
+  { machineCode: 'MCH-2026-005', sensorType: 'runtime_hours', unit: 'h', criticalThreshold: 700, comparison: 'gte' },
+  { machineCode: 'MCH-2026-005', sensorType: 'pressure', unit: 'bar', criticalThreshold: 12, comparison: 'gt' },
+  { machineCode: 'MCH-2026-006', sensorType: 'temperature', unit: '°C', criticalThreshold: 85, comparison: 'gt' },
+  { machineCode: 'MCH-2026-006', sensorType: 'vibration', unit: 'mm/s', criticalThreshold: 4.5, comparison: 'gt' },
+  { machineCode: 'MCH-2026-006', sensorType: 'runtime_hours', unit: 'h', criticalThreshold: 500, comparison: 'gte' },
+  { machineCode: 'MCH-2026-006', sensorType: 'pressure', unit: 'bar', criticalThreshold: 5, comparison: 'gt' },
+  { machineCode: 'MCH-2026-007', sensorType: 'temperature', unit: '°C', criticalThreshold: 80, comparison: 'gt' },
+  { machineCode: 'MCH-2026-007', sensorType: 'vibration', unit: 'mm/s', criticalThreshold: 4.5, comparison: 'gt' },
+  { machineCode: 'MCH-2026-007', sensorType: 'runtime_hours', unit: 'h', criticalThreshold: 600, comparison: 'gte' },
+  { machineCode: 'MCH-2026-007', sensorType: 'pressure', unit: 'bar', criticalThreshold: 7, comparison: 'gt' },
+];
+
+export const DEMO_SENSOR_READINGS = [
+  { machineCode: 'MCH-2026-001', temperature: 62, vibration: 2.1, runtime_hours: 428, pressure: 6.4 },
+  { machineCode: 'MCH-2026-002', temperature: 71, vibration: 3.2, runtime_hours: 576, pressure: 238 },
+  { machineCode: 'MCH-2026-003', temperature: 78, vibration: 3.8, runtime_hours: 744, pressure: 7.1 },
+  { machineCode: 'MCH-2026-004', temperature: 69, vibration: 2.9, runtime_hours: 365, pressure: 5.3 },
+  { machineCode: 'MCH-2026-005', temperature: 84, vibration: 2.2, runtime_hours: 652, pressure: 10.8 },
+  { machineCode: 'MCH-2026-006', temperature: 92, vibration: 4.1, runtime_hours: 486, pressure: 4.7 },
+  { machineCode: 'MCH-2026-007', temperature: 66, vibration: 2.7, runtime_hours: 532, pressure: 6.2 },
+];
+
+export const DEMO_NOTIFICATIONS = [
+  { type: 'critical_fault', title: 'MCH-2026-004 kritik arıza bildirimi', message: 'ARZ-2026-001: Paketleme hattı kontrol ünitesi yanıt vermiyor', severity: 'critical', dedupeKey: 'critical-fault:1', createdAt: '2026-11-26T06:20:00.000Z' },
+  { type: 'work_order_assignment', title: 'Deniz Teknisyen adına yeni iş emri', message: 'IE-2026-002 iş emri MCH-2026-005 için Deniz Teknisyen adına atandı.', severity: 'warning', dedupeKey: 'work-order-assignment:2', createdAt: '2026-11-25T13:25:00.000Z' },
+  { type: 'critical_stock', title: 'YDK-2026-003 kritik stok seviyesine düştü', message: 'Endüktif Yaklaşım Sensörü M12 stokta 2 adet kaldı; minimum seviye 4 adet.', severity: 'warning', dedupeKey: 'critical-stock:3', createdAt: '2026-11-24T08:40:00.000Z' },
+  { type: 'critical_stock', title: 'YDK-2026-004 kritik stok seviyesine düştü', message: 'Hidrolik Yağ Filtresi HP-400 stokta 0 adet kaldı; minimum seviye 3 adet.', severity: 'warning', dedupeKey: 'critical-stock:4', createdAt: '2026-11-23T10:05:00.000Z' },
+  { type: 'sensor_threshold', title: 'MCH-2026-006 sensör eşiği aşıldı', message: 'Sıcaklık 92 °C; IE-2026-004 kestirimci bakım iş emri oluşturuldu.', severity: 'critical', dedupeKey: 'sensor-alert:1', createdAt: '2026-11-23T10:10:00.000Z' },
+];
+
+export const DEMO_SHIFT_HANDOVERS = [
+  {
+    code: 'DT-2026-001',
+    shift: 'morning',
+    shiftDate: '2026-11-26',
+    summary: 'Paketleme hattı kontrol ünitesi arızası takipte; pres yağ basıncı izleniyor.',
+    notes: 'Paketleme hattı enerjisi kesilmeden kontrol kartı değişimine hazır olun.',
+    criticalFaults: [{ id: 1, code: 'ARZ-2026-001', title: 'Paketleme hattı kontrol ünitesi yanıt vermiyor', machineCode: 'MCH-2026-004' }],
+    attentionMachines: [
+      { id: 2, code: 'MCH-2026-002', name: 'Hidrolik Pres Hattı', reasons: ['Bakımda'] },
+      { id: 4, code: 'MCH-2026-004', name: 'Otomatik Paketleme Hattı', reasons: ['Açık yüksek/kritik arıza'] },
+      { id: 5, code: 'MCH-2026-005', name: 'Endüstriyel Buhar Kazanı', reasons: ['Açık yüksek/kritik arıza'] },
+      { id: 6, code: 'MCH-2026-006', name: 'Paletleme Konveyörü', reasons: ['Sensör eşiği aşıldı', 'Bakımda'] },
+    ],
+    createdBy: 3,
+    createdAt: '2026-11-26T13:45:00.000Z',
+    approvedBy: 2,
+    approvedAt: '2026-11-26T14:00:00.000Z',
+  },
+  {
+    code: 'DT-2026-002',
+    shift: 'evening',
+    shiftDate: '2026-11-26',
+    summary: 'Buhar kazanı seviye sensörü ve konveyör sıcaklık uyarısı açık kaldı.',
+    notes: 'Gece vardiyası sensör kablolarını kontrol edip paletleme hattını yüksek hızda çalıştırmasın.',
+    criticalFaults: [{ id: 1, code: 'ARZ-2026-001', title: 'Paketleme hattı kontrol ünitesi yanıt vermiyor', machineCode: 'MCH-2026-004' }],
+    attentionMachines: [
+      { id: 2, code: 'MCH-2026-002', name: 'Hidrolik Pres Hattı', reasons: ['Bakımda'] },
+      { id: 4, code: 'MCH-2026-004', name: 'Otomatik Paketleme Hattı', reasons: ['Açık yüksek/kritik arıza'] },
+      { id: 5, code: 'MCH-2026-005', name: 'Endüstriyel Buhar Kazanı', reasons: ['Açık yüksek/kritik arıza'] },
+      { id: 6, code: 'MCH-2026-006', name: 'Paletleme Konveyörü', reasons: ['Sensör eşiği aşıldı', 'Bakımda'] },
+    ],
+    createdBy: 2,
+    createdAt: '2026-11-26T21:50:00.000Z',
+    approvedBy: null,
+    approvedAt: null,
+  },
+];
+
 export async function resetDatabase(database) {
+  await run(database, 'DELETE FROM notification_reads');
+  await run(database, 'DELETE FROM notifications');
+  await run(database, 'DELETE FROM shift_handover_approvals');
+  await run(database, 'DELETE FROM shift_handovers');
+  await run(database, 'DELETE FROM sensor_alerts');
+  await run(database, 'DELETE FROM sensor_readings');
+  await run(database, 'DELETE FROM sensor_thresholds');
   await run(database, 'DELETE FROM stock_movements');
   await run(database, 'DELETE FROM stock_usages');
   await run(database, 'DELETE FROM spare_parts');
@@ -572,10 +676,11 @@ export async function resetDatabase(database) {
   await run(database, 'DELETE FROM maintenance_records');
   await run(database, 'DELETE FROM maintenance_runtime_readings');
   await run(database, 'DELETE FROM machines');
+  await run(database, 'DELETE FROM user_shift_assignments');
   await run(database, 'DELETE FROM users');
   await run(
     database,
-    "DELETE FROM sqlite_sequence WHERE name IN ('stock_movements', 'stock_usages', 'spare_parts', 'maintenance_execution_items', 'maintenance_executions', 'maintenance_checklist_items', 'maintenance_plans', 'work_orders', 'faults', 'maintenance_records', 'machines', 'users')",
+    "DELETE FROM sqlite_sequence WHERE name IN ('notifications', 'shift_handover_approvals', 'shift_handovers', 'sensor_alerts', 'sensor_readings', 'sensor_thresholds', 'stock_movements', 'stock_usages', 'spare_parts', 'maintenance_execution_items', 'maintenance_executions', 'maintenance_checklist_items', 'maintenance_plans', 'work_orders', 'faults', 'maintenance_records', 'machines', 'users')",
   );
 }
 
@@ -589,6 +694,14 @@ export async function seedDemoData(database) {
         database,
         'INSERT INTO users (id, name, email, role, initials) VALUES (?, ?, ?, ?, ?)',
         [user.id, user.name, user.email, user.role, user.initials],
+      );
+    }
+
+    for (const assignment of DEMO_USER_SHIFT_ASSIGNMENTS) {
+      await run(
+        database,
+        'INSERT INTO user_shift_assignments (user_id, shift) VALUES (?, ?)',
+        [assignment.userId, assignment.shift],
       );
     }
 
@@ -642,6 +755,49 @@ export async function seedDemoData(database) {
       machineIds.set(machine.code, result.lastID);
     }
 
+    for (const threshold of DEMO_SENSOR_THRESHOLDS) {
+      await run(
+        database,
+        `INSERT INTO sensor_thresholds
+          (machine_id, sensor_type, unit, critical_threshold, comparison, enabled, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+        [
+          machineIds.get(threshold.machineCode),
+          threshold.sensorType,
+          threshold.unit,
+          threshold.criticalThreshold,
+          threshold.comparison,
+          timestamp,
+          timestamp,
+        ],
+      );
+    }
+
+    for (const reading of DEMO_SENSOR_READINGS) {
+      for (const sensorType of ['temperature', 'vibration', 'runtime_hours', 'pressure']) {
+        const threshold = DEMO_SENSOR_THRESHOLDS.find((candidate) => (
+          candidate.machineCode === reading.machineCode
+          && candidate.sensorType === sensorType
+        ));
+        if (!threshold) {
+          throw new Error(`Seeded sensor threshold not found: ${reading.machineCode} / ${sensorType}`);
+        }
+        await run(
+          database,
+          `INSERT INTO sensor_readings
+            (machine_id, sensor_type, value, unit, source, recorded_by, recorded_at)
+           VALUES (?, ?, ?, ?, 'demo', 1, ?)`,
+          [
+            machineIds.get(reading.machineCode),
+            sensorType,
+            reading[sensorType],
+            threshold.unit,
+            '2026-11-27T05:00:00.000Z',
+          ],
+        );
+      }
+    }
+
     const faultIds = new Map();
     for (const fault of DEMO_FAULTS) {
       const result = await run(
@@ -693,6 +849,20 @@ export async function seedDemoData(database) {
       );
       workOrderIds.set(workOrder.code, result.lastID);
     }
+
+    await run(
+      database,
+      `INSERT INTO sensor_alerts
+        (machine_id, sensor_type, value, threshold_value, unit, comparison, status,
+         fault_id, work_order_id, prior_machine_status, created_by, created_at)
+       VALUES (?, 'temperature', 92, 85, '°C', 'gt', 'active', ?, ?, 'maintenance', 2, ?)`,
+      [
+        machineIds.get('MCH-2026-006'),
+        faultIds.get('ARZ-2026-004'),
+        workOrderIds.get('IE-2026-004'),
+        '2026-11-23T10:10:00.000Z',
+      ],
+    );
 
     const demoToday = todayPlantDate();
     const preventivePlanIds = new Map();
@@ -890,6 +1060,53 @@ export async function seedDemoData(database) {
         ],
       );
     }
+
+    for (const notification of DEMO_NOTIFICATIONS) {
+      await run(
+        database,
+        `INSERT INTO notifications
+          (type, title, message, severity, dedupe_key, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          notification.type,
+          notification.title,
+          notification.message,
+          notification.severity,
+          notification.dedupeKey,
+          notification.createdAt,
+        ],
+      );
+    }
+
+    for (const handover of DEMO_SHIFT_HANDOVERS) {
+      const result = await run(
+        database,
+        `INSERT INTO shift_handovers
+          (code, shift, shift_date, summary, notes, critical_faults_json,
+           attention_machines_json, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          handover.code,
+          handover.shift,
+          handover.shiftDate,
+          handover.summary,
+          handover.notes,
+          JSON.stringify(handover.criticalFaults),
+          JSON.stringify(handover.attentionMachines),
+          handover.createdBy,
+          handover.createdAt,
+        ],
+      );
+      if (handover.approvedBy) {
+        await run(
+          database,
+          `INSERT INTO shift_handover_approvals
+            (handover_id, approved_by, approved_at)
+           VALUES (?, ?, ?)`,
+          [result.lastID, handover.approvedBy, handover.approvedAt],
+        );
+      }
+    }
   });
 
   return {
@@ -908,5 +1125,10 @@ export async function seedDemoData(database) {
       (total, plan) => total + plan.checklist.length,
       0,
     ),
+    sensorThresholds: DEMO_SENSOR_THRESHOLDS.length,
+    sensorReadings: DEMO_SENSOR_READINGS.length * 4,
+    sensorAlerts: 1,
+    notifications: DEMO_NOTIFICATIONS.length,
+    shiftHandovers: DEMO_SHIFT_HANDOVERS.length,
   };
 }

@@ -57,6 +57,20 @@ import {
 import { getMaintenanceAnalytics } from './services/maintenance-analytics-service.js';
 import { getMachineMaintenanceHistory } from './services/maintenance-history-service.js';
 import {
+  getMachineSensorOverview,
+  recordMachineSensorReadings,
+  replaceMachineSensorThresholds,
+} from './services/sensor-service.js';
+import {
+  approveShiftHandover,
+  createShiftHandover,
+  getShiftHandoverLedger,
+} from './services/shift-handover-service.js';
+import {
+  getNotificationCenter,
+  markEveryNotificationRead,
+} from './services/notification-service.js';
+import {
   getPreventiveServiceReport,
   getWorkOrderServiceReport,
 } from './services/service-report-service.js';
@@ -163,6 +177,39 @@ export function createApp(options = {}) {
       criticalStockParts: await getCriticalStockCount(request.db),
     });
   }));
+
+  api.get('/notifications', asyncHandler(async (request, response) => {
+    const result = await getNotificationCenter(request.db, request.user.id);
+    response.json(result);
+  }));
+
+  api.post('/notifications/read-all', asyncHandler(async (request, response) => {
+    const result = await markEveryNotificationRead(request.db, request.user.id);
+    response.json(result);
+  }));
+
+  api.get('/shift-handovers', asyncHandler(async (request, response) => {
+    const result = await getShiftHandoverLedger(request.db, request.user);
+    response.json(result);
+  }));
+
+  api.post('/shift-handovers', asyncHandler(async (request, response) => {
+    const handover = await createShiftHandover(request.db, request.body, request.user);
+    response.status(201).json({ handover });
+  }));
+
+  api.post(
+    '/shift-handovers/:id/approve',
+    asyncHandler(async (request, response) => {
+      const handoverId = parsePositiveId(request.params.id, 'Shift handover id');
+      const handover = await approveShiftHandover(
+        request.db,
+        handoverId,
+        request.user,
+      );
+      response.json({ handover });
+    }),
+  );
 
   api.get(
     '/analytics/maintenance',
@@ -525,6 +572,40 @@ export function createApp(options = {}) {
     if (!machine) throw notFound('Machine not found', 'MACHINE_NOT_FOUND');
     response.json({ machine });
   }));
+
+  api.get('/machines/:id/sensors', asyncHandler(async (request, response) => {
+    const machineId = parseMachineId(request.params.id);
+    const result = await getMachineSensorOverview(request.db, machineId);
+    response.json(result);
+  }));
+
+  api.put(
+    '/machines/:id/sensor-thresholds',
+    requireRole('admin'),
+    asyncHandler(async (request, response) => {
+      const machineId = parseMachineId(request.params.id);
+      const result = await replaceMachineSensorThresholds(
+        request.db,
+        machineId,
+        request.body,
+      );
+      response.json(result);
+    }),
+  );
+
+  api.post(
+    '/machines/:id/sensor-readings',
+    asyncHandler(async (request, response) => {
+      const machineId = parseMachineId(request.params.id);
+      const result = await recordMachineSensorReadings(
+        request.db,
+        machineId,
+        request.body,
+        request.user,
+      );
+      response.status(201).json(result);
+    }),
+  );
 
   api.get('/machines/:id', asyncHandler(async (request, response) => {
     const machineId = parseMachineId(request.params.id);

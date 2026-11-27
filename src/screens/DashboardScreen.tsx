@@ -40,6 +40,7 @@ const summaryItems: { key: keyof DashboardSummary; label: string; icon: string; 
   { key: 'overduePreventive', label: 'Geciken periyodik', icon: '!', color: colors.danger, background: colors.dangerSoft },
   { key: 'duePreventive', label: 'Bugünkü periyodik', icon: '◷', color: colors.warning, background: colors.warningSoft },
   { key: 'maintenance', label: 'Bakımda', icon: '◐', color: colors.warning, background: colors.warningSoft },
+  { key: 'warning', label: 'Uyarı / Bakım gerekli', icon: '△', color: colors.warning, background: colors.warningSoft },
   { key: 'faulted', label: 'Arızalı', icon: '!', color: colors.danger, background: colors.dangerSoft },
   { key: 'openFaults', label: 'Açık arızalar', icon: '⚑', color: colors.danger, background: colors.dangerSoft },
   { key: 'activeWorkOrders', label: 'Aktif iş emirleri', icon: '⚙', color: colors.primaryDark, background: colors.primarySoft },
@@ -75,7 +76,12 @@ export function DashboardScreen({ user, onOpenMachine, onOpenInventory, onOpenSp
     void load();
   }, [load]);
 
-  const attentionMachines = machines.filter((machine) => machine.status === 'faulted' || machine.status === 'maintenance' || machine.status === 'stopped');
+  const attentionMachines = machines.filter((machine) => (
+    machine.status === 'faulted'
+    || machine.status === 'maintenance'
+    || machine.status === 'stopped'
+    || machine.status === 'warning'
+  ));
   const visibleSummaryItems = user.role === 'operator'
     ? summaryItems.filter((item) => (
       !item.key.toString().includes('Preventive') && item.key !== 'criticalStockParts'
@@ -165,10 +171,16 @@ export function DashboardScreen({ user, onOpenMachine, onOpenInventory, onOpenSp
           <Text style={styles.legendTotal}>{summary?.total ?? 0} toplam</Text>
         </View>
         <View style={styles.legendBars}>
-          {(['running', 'maintenance', 'faulted', 'stopped'] as const).map((status) => {
+          {(['running', 'maintenance', 'warning', 'faulted', 'stopped'] as const).map((status) => {
             const value = summary?.[status] ?? 0;
             const total = Math.max(summary?.total ?? 0, 1);
-            const color = status === 'running' ? colors.success : status === 'maintenance' ? colors.warning : status === 'faulted' ? colors.danger : colors.neutral;
+            const color = status === 'running'
+              ? colors.success
+              : status === 'maintenance' || status === 'warning'
+                ? colors.warning
+                : status === 'faulted'
+                  ? colors.danger
+                  : colors.neutral;
             return (
               <View key={status} style={styles.legendRow}>
                 <Text style={styles.legendLabel}>{statusLabels[status]}</Text>
@@ -213,7 +225,7 @@ const styles = StyleSheet.create({
   legendTotal: { ...typography.label, color: colors.primary },
   legendBars: { gap: spacing.md },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  legendLabel: { ...typography.caption, color: colors.inkMuted, width: 82 },
+  legendLabel: { ...typography.caption, color: colors.inkMuted, width: 140 },
   legendTrack: { flex: 1, height: 9, borderRadius: 5, backgroundColor: colors.neutralSoft, overflow: 'hidden' },
   legendFill: { height: '100%', borderRadius: 5 },
   legendValue: { ...typography.label, color: colors.ink, width: 24, textAlign: 'right' },

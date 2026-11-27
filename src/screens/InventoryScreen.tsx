@@ -37,6 +37,7 @@ const statusOptions: readonly { value: MachineStatus | ''; label: string }[] = [
   { value: 'maintenance', label: statusLabels.maintenance },
   { value: 'faulted', label: statusLabels.faulted },
   { value: 'stopped', label: statusLabels.stopped },
+  { value: 'warning', label: statusLabels.warning },
 ];
 
 const criticalityOptions: readonly { value: Criticality | ''; label: string }[] = [

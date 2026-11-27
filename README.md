@@ -2,7 +2,7 @@
 
 Endüstriyel tesisler için makine envanteri, QR kodla makine erişimi, periyodik bakım planlama, bakım/arıza kayıtları ve rol bazlı çalışma akışları sunan mobil öncelikli CMMS uygulaması.
 
-Faz 1–5 kapsamında Expo tabanlı iOS/Android/Web arayüzü, Express REST API, kalıcı SQLite veritabanı, bakım analitiği ve otomatik backend testleri bulunur.
+Faz 1–6 kapsamında Expo tabanlı iOS/Android/Web arayüzü, Express REST API, kalıcı SQLite veritabanı, bakım analitiği, kestirimci bakım ve otomatik backend testleri bulunur.
 
 ## Özellikler
 
@@ -32,6 +32,10 @@ Faz 1–5 kapsamında Expo tabanlı iOS/Android/Web arayüzü, Express REST API,
 - **Meknivo marka kimliği:** Resmi SVG varlıkları giriş, üst navigasyon, yükleme ekranı, makine kartı ve yazdırılabilir QR kimlik kartında kullanılır.
 - **Demo verileri:** Gerçekçi endüstriyel makineler, 3 farklı rolde kullanıcı, farklı aşamalarda arıza/iş emri, altı periyodik bakım planı, sekiz yedek parça ve örnek stok hareketleri.
 - **Faz 5 bakım analitiği:** Bakım yöneticisi için MTBF, MTTR, toplam müdahale süresi, iş emri/periyodik bakım yedek parça maliyetleri, en çok arıza veren ilk 5 makine ve beş kanonik arıza kategorisinin dağılımı.
+- **Faz 6 kestirimci bakım motoru:** Makine bazlı sıcaklık, titreşim, çalışma saati ve basınç eşikleri; canlı telemetri kartları; sensör verisi giriş/simülasyon aracı; eşik aşımında otomatik arıza, kestirimci bakım iş emri ve `Uyarı / Bakım Gerekli` makine durumu.
+- **Vardiya devir teslim defteri:** Sabah, akşam ve gece vardiyaları için özet, açık kritik arızalar, dikkat gerektiren makineler, devir notları ve vardiya atamasına göre yalnızca sonraki vardiya personelinin `Teslim Aldım / Onayla` imzası.
+- **Merkezi bildirim merkezi:** Üst menüdeki okunmamış bildirim sayacı; kritik arıza, teknisyen iş emri ataması, kritik stok ve sensör eşiği olaylarında otomatik bildirim üretimi; kullanıcı bazlı `Tümünü Okundu İşaretle` işlemi.
+- **Faz 6 demo verileri:** Her makine için sensör eşikleri ve örnek telemetri, aktif eşik aşımı uyarısı, kritik bildirimler ve son iki vardiyaya ait devir teslim kayıtları.
 - **Makine bakım sicil kartı:** Makine detayındaki **Makine Bakım Geçmişi** sekmesi; arızalar, iş emirleri, periyodik bakım tamamlamaları, eski bakım kayıtları ve parça kullanım/iade hareketlerini kronolojik gösterir.
 - **Meknivo logolu teknik servis formu:** Tamamlanan iş emirleri ve periyodik bakım kayıtları için makine künyesi, kök neden, kontrol sonuçları, parça maliyeti, teknisyen/bakım yöneticisi imza alanları ve A4 yazdırma düzeni içeren PDF.
 - **Expo Go uyumluluğu:** Fiziksel cihazda LAN IP'den API adresi çözümleme, eyleme dönük ağ hataları, Hermes uyumlu tarih/sayı biçimleme, QR üretim fallback'i ve bölüm bazlı veri yükleme hata yönetimi.
@@ -68,7 +72,7 @@ npm install
 npm run demo
 ```
 
-Bu komut demo kullanıcılarını, endüstriyel makineleri, geçmiş arıza/iş emirlerini, periyodik bakım tamamlamalarını, yedek parçaları ve stok hareketlerini yerel SQLite veritabanına deterministik olarak yeniden yükler.
+Bu komut demo kullanıcılarını, endüstriyel makineleri, geçmiş arıza/iş emirlerini, periyodik bakım tamamlamalarını, yedek parçaları, stok hareketlerini, sensör eşikleri/telemetrisini, bildirimleri ve vardiya devir kayıtlarını yerel SQLite veritabanına deterministik olarak yeniden yükler.
 
 ### 3. API sunucusunu başlatın
 
@@ -140,6 +144,7 @@ Giriş ekranındaki **Hızlı Demo Giriş** düğmeleri ilgili rolle doğrudan o
 | `npm run capture:ui` | API ve Expo sunucuları çalışırken gerçek tarayıcı akışlarını doğrular ve ekran görüntülerini kaydeder |
 | `npm run capture:phase4` | Çalışan Faz 4 API/Expo uygulamasından yedek parça, uyarı ve parça kullanımı ekran kanıtlarını kaydeder |
 | `npm run capture:phase5` | Çalışan API/Expo uygulamasından analitik, servis formu ve makine bakım geçmişi ekran kanıtlarını kaydeder |
+| `npm run capture:phase6` | Çalışan Faz 6 API/Expo uygulamasından dashboard, sensör, devir teslim ve bildirim merkezi ekran kanıtlarını kaydeder |
 | `npx expo-doctor` | Expo SDK ve paket uyumluluğunu denetler |
 | `npx expo install --check` | Expo SDK'nın beklediği paket sürümlerini doğrular |
 | `npm run brand:generate` | Resmi `assets/brand/` SVG dosyalarından uygulama içi marka kaynağını yeniler |
@@ -155,6 +160,13 @@ Tüm makine yazma işlemleri `x-user-id` başlığındaki kullanıcı kimliği i
 | `GET` | `/api/auth/demo-users` | Herkese açık |
 | `POST` | `/api/auth/login` | Herkese açık |
 | `GET` | `/api/dashboard/summary` | Oturum açmış kullanıcı; açık arıza, aktif iş emri, periyodik bakım ve kritik stok parçası sayaçlarını destekler |
+| `GET` | `/api/machines/:id/sensors` | Oturum açmış kullanıcı; sensör eşikleri, son telemetri değerleri ve aktif kestirimci bakım uyarıları |
+| `PUT` | `/api/machines/:id/sensor-thresholds` | Bakım yöneticisi; makine sensör eşiklerini tanımlar veya günceller |
+| `POST` | `/api/machines/:id/sensor-readings` | Oturum açmış kullanıcı; sensör verisi girer/simüle eder ve eşik aşımında iş emri üretir |
+| `GET/POST` | `/api/shift-handovers` | Oturum açmış kullanıcı; devir teslim defterini görüntüler ve yeni vardiya kaydı oluşturur |
+| `POST` | `/api/shift-handovers/:id/approve` | Sonraki vardiya personeli; devir teslim kaydını onaylar |
+| `GET` | `/api/notifications` | Oturum açmış kullanıcı; bildirim akışı ve kullanıcıya özel okunmamış sayacı |
+| `POST` | `/api/notifications/read-all` | Oturum açmış kullanıcı; tüm bildirimlerini okundu işaretler |
 | `GET` | `/api/analytics/maintenance` | Bakım yöneticisi; MTBF, MTTR, müdahale süresi, yedek parça maliyeti, Top 5 arıza makinesi ve kategori dağılımı |
 | `GET` | `/api/spare-parts` | Oturum açmış kullanıcı; `q`, `code`, `name`, `category`, `status` filtreleriyle yedek parça kataloğu |
 | `GET/POST` | `/api/spare-parts` | Okuma: herkese açık oturum; yazma: yönetici |
@@ -207,7 +219,15 @@ Varsayılan SQLite dosyası `server/data/cmms.sqlite` konumundadır. Alternatif 
 
 ## Görsel doğrulama
 
-Gerçek Expo Web uygulaması Edge üzerinde `390×844` mobil ve `1440×900` masaüstü görünümlerinde çalıştırılarak doğrulandı. Faz 5 için `2a32513` baseline sürümündeki dashboard, iş emri ve makine detayı ekranları değişiklik sonrası aynı senaryolarla karşılaştırıldı; analitik KPI ve makine bakım geçmişi ekranları yalnızca değişiklik sonrası sürümde bulunmaktadır. Faz 4 için `bb52dd0` baseline sürümündeki dashboard ve iş emri ekranları ile değişiklik sonrası aynı senaryolar karşılaştırıldı; yeni yedek parça, uyarı ve parça kullanımı ekranlarının çıktıları `docs/screenshots/` klasöründe kayıtlıdır:
+Gerçek Expo Web uygulaması Edge üzerinde `390×844` mobil ve `1440×900` masaüstü görünümlerinde çalıştırılarak doğrulandı. Faz 6 için `bbef58d` baseline sürümündeki dashboard ve makine detayı ekranları, Faz 6 PR head sürümünde aynı demo kullanıcısı, veri seti, viewport ve ekran durumu ile karşılaştırıldı; sensör, devir teslim ve bildirim merkezi yeni ekranları yalnızca değişiklik sonrası sürümde bulunmaktadır. Faz 5 için `2a32513` baseline sürümündeki dashboard, iş emri ve makine detayı ekranları değişiklik sonrası aynı senaryolarla karşılaştırıldı; analitik KPI ve makine bakım geçmişi ekranları yalnızca değişiklik sonrası sürümde bulunmaktadır. Faz 4 için `bb52dd0` baseline sürümündeki dashboard ve iş emri ekranları ile değişiklik sonrası aynı senaryolar karşılaştırıldı; yeni yedek parça, uyarı ve parça kullanımı ekranlarının çıktıları `docs/screenshots/` klasöründe kayıtlıdır:
+
+- [Faz 6 öncesi mobil dashboard](docs/screenshots/before-phase6-mobile-dashboard.png) / [Faz 6 sonrası mobil dashboard](docs/screenshots/after-phase6-mobile-dashboard.png)
+- [Faz 6 öncesi mobil makine detayı](docs/screenshots/before-phase6-mobile-machine-detail.png) / [Faz 6 sonrası mobil makine detayı](docs/screenshots/after-phase6-mobile-machine-detail.png)
+- [Faz 6 öncesi masaüstü dashboard](docs/screenshots/before-phase6-desktop-dashboard.png) / [Faz 6 sonrası masaüstü dashboard](docs/screenshots/after-phase6-desktop-dashboard.png)
+- [Faz 6 öncesi masaüstü makine detayı](docs/screenshots/before-phase6-desktop-machine-detail.png) / [Faz 6 sonrası masaüstü makine detayı](docs/screenshots/after-phase6-desktop-machine-detail.png)
+- [Faz 6 mobil sensör göstergeleri](docs/screenshots/after-phase6-mobile-machine-sensors.png) / [Faz 6 masaüstü sensör göstergeleri](docs/screenshots/after-phase6-desktop-machine-sensors.png)
+- [Faz 6 mobil vardiya devir teslim defteri](docs/screenshots/after-phase6-mobile-shift-handover.png) / [Faz 6 masaüstü vardiya devir teslim defteri](docs/screenshots/after-phase6-desktop-shift-handover.png)
+- [Faz 6 mobil bildirim merkezi](docs/screenshots/after-phase6-mobile-notifications.png) / [Faz 6 masaüstü bildirim merkezi](docs/screenshots/after-phase6-desktop-notifications.png)
 
 - [Öncesi mobil dashboard](docs/screenshots/before-phase5-mobile-dashboard.png) / [Sonrası mobil dashboard](docs/screenshots/after-phase5-mobile-dashboard.png)
 - [Öncesi mobil iş emirleri](docs/screenshots/before-phase5-mobile-work-orders.png) / [Sonrası mobil iş emirleri](docs/screenshots/after-phase5-mobile-work-orders.png)
@@ -251,7 +271,7 @@ Gerçek Expo Web uygulaması Edge üzerinde `390×844` mobil ve `1440×900` masa
 - [Mobil envanter](docs/screenshots/after-mobile-inventory.png)
 - [Mobil QR okutma](docs/screenshots/after-mobile-scanner.png)
 
-`npm run capture:ui` komutu bu akışları yeniden çalıştırır; API ve Expo sunucularının çalışıyor olması gerekir. Betik, gerçek bir PNG dosyası seçip arıza bildirimini gönderir; teknisyen iş emrini müdahale/parça/çözüldü/kapatıldı durumları boyunca ilerletir; yeni periyodik plan formunu ve kontrol listesi icra ekranını doğrular; yatay taşma ile tarayıcı hatalarını denetler. `npm run capture:phase5` aynı Edge akışında dashboard, iş emri, makine detayı/geçmişi ve yönetim analitiği ekranlarını `before`/`after` etiketiyle kaydeder.
+`npm run capture:ui` komutu bu akışları yeniden çalıştırır; API ve Expo sunucularının çalışıyor olması gerekir. Betik, gerçek bir PNG dosyası seçip arıza bildirimini gönderir; teknisyen iş emrini müdahale/parça/çözüldü/kapatıldı durumları boyunca ilerletir; yeni periyodik plan formunu ve kontrol listesi icra ekranını doğrular; yatay taşma ile tarayıcı hatalarını denetler. `npm run capture:phase5` aynı Edge akışında dashboard, iş emri, makine detayı/geçmişi ve yönetim analitiği ekranlarını `before`/`after` etiketiyle kaydeder. `CMMS_CAPTURE_LABEL=before npm run capture:phase6` ve `CMMS_CAPTURE_LABEL=after npm run capture:phase6` komutları aynı Faz 6 senaryolarını karşılaştırmalı baseline/after kanıtları üretir.
 
 ## Proje yapısı
 

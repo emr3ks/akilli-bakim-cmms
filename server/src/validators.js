@@ -4,6 +4,7 @@ import { isDateOnly } from './utils/date-only.js';
 export const MACHINE_CODE_PATTERN = /^MCH-\d{4}-\d{3}$/;
 export const CRITICALITIES = ['high', 'medium', 'low'];
 export const MACHINE_STATUSES = ['running', 'maintenance', 'faulted', 'stopped'];
+export const MACHINE_FILTER_STATUSES = [...MACHINE_STATUSES, 'warning'];
 export const USER_ROLES = ['admin', 'technician', 'operator'];
 export const RECORD_TYPES = ['maintenance', 'fault'];
 export const FAULT_CATEGORIES = [
@@ -47,6 +48,10 @@ export const SPARE_PART_UNITS = ['piece', 'meter', 'liter', 'set'];
 export const SPARE_PART_STATUSES = ['sufficient', 'critical', 'depleted'];
 export const STOCK_MOVEMENT_TYPES = ['in', 'out', 'return'];
 export const SPARE_PART_CODE_PATTERN = /^YDK-\d{4}-\d{3}$/;
+export const SENSOR_TYPES = ['temperature', 'vibration', 'runtime_hours', 'pressure'];
+export const SENSOR_COMPARISONS = ['gt', 'gte'];
+export const SENSOR_SOURCES = ['manual', 'simulation', 'demo'];
+export const SHIFT_TYPES = ['morning', 'evening', 'night'];
 
 const SPARE_PART_CATEGORY_ALIASES = {
   bearing: 'bearing',
@@ -159,8 +164,8 @@ export function validateMachineFilters(query = {}) {
     filters.line = query.line.trim();
   }
   if (query.status !== undefined && query.status !== '') {
-    if (!MACHINE_STATUSES.includes(query.status)) {
-      throw validationError(`status must be one of: ${MACHINE_STATUSES.join(', ')}`);
+    if (!MACHINE_FILTER_STATUSES.includes(query.status)) {
+      throw validationError(`status must be one of: ${MACHINE_FILTER_STATUSES.join(', ')}`);
     }
     filters.status = query.status;
   }
@@ -777,4 +782,113 @@ export function validateStockMovementPayload(payload) {
     }
   }
   return data;
+}
+
+function phase6Text(value, field, { required = false, maxLength = 500 } = {}) {
+  if (value === undefined || value === null) {
+    if (required) throw validationError(`${field} is required and must be a non-empty string`);
+    return null;
+  }
+  if (typeof value !== 'string' || (required && !value.trim())) {
+    throw validationError(`${field} must be a non-empty string`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed && !required) return null;
+  if (trimmed.length > maxLength) {
+    throw validationError(`${field} must be ${maxLength} characters or fewer`);
+  }
+  return trimmed;
+}
+
+export function validateSensorThresholdsPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw validationError('Sensor-threshold request body must be a JSON object');
+  }
+  if (!Array.isArray(payload.thresholds)) {
+    throw validationError('Sensor thresholds must be an array');
+  }
+
+  const seen = new Set();
+  const thresholds = payload.thresholds.map((threshold, index) => {
+    if (!threshold || typeof threshold !== 'object' || Array.isArray(threshold)) {
+      throw validationError(`Sensor threshold ${index + 1} must be a JSON object`);
+    }
+    if (!SENSOR_TYPES.includes(threshold.sensorType)) {
+      throw validationError(`Sensor threshold ${index + 1} sensorType must be one of: ${SENSOR_TYPES.join(', ')}`);
+    }
+    if (seen.has(threshold.sensorType)) {
+      throw validationError(`Sensor threshold ${index + 1} repeats sensorType ${threshold.sensorType}`);
+    }
+    seen.add(threshold.sensorType);
+    if (!SENSOR_COMPARISONS.includes(threshold.comparison)) {
+      throw validationError(`Sensor threshold ${index + 1} comparison must be one of: ${SENSOR_COMPARISONS.join(', ')}`);
+    }
+    if (threshold.enabled !== undefined && typeof threshold.enabled !== 'boolean') {
+      throw validationError(`Sensor threshold ${index + 1} enabled must be a boolean`);
+    }
+    return {
+      sensorType: threshold.sensorType,
+      unit: phase6Text(threshold.unit, `Sensor threshold ${index + 1} unit`, {
+        required: true,
+        maxLength: 20,
+      }),
+      criticalThreshold: nonNegativeNumber(
+        threshold.criticalThreshold,
+        `Sensor threshold ${index + 1} criticalThreshold`,
+      ),
+      comparison: threshold.comparison,
+      enabled: threshold.enabled ?? true,
+    };
+  });
+  return { thresholds };
+}
+
+export function validateSensorReadingsPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw validationError('Sensor-reading request body must be a JSON object');
+  }
+  if (!Array.isArray(payload.readings) || payload.readings.length === 0) {
+    throw validationError('Sensor readings must contain at least one item');
+  }
+  if (payload.source !== undefined && !SENSOR_SOURCES.includes(payload.source)) {
+    throw validationError(`Sensor reading source must be one of: ${SENSOR_SOURCES.join(', ')}`);
+  }
+  const seen = new Set();
+  const readings = payload.readings.map((reading, index) => {
+    if (!reading || typeof reading !== 'object' || Array.isArray(reading)) {
+      throw validationError(`Sensor reading ${index + 1} must be a JSON object`);
+    }
+    if (!SENSOR_TYPES.includes(reading.sensorType)) {
+      throw validationError(`Sensor reading ${index + 1} sensorType must be one of: ${SENSOR_TYPES.join(', ')}`);
+    }
+    if (seen.has(reading.sensorType)) {
+      throw validationError(`Sensor reading ${index + 1} repeats sensorType ${reading.sensorType}`);
+    }
+    seen.add(reading.sensorType);
+    return {
+      sensorType: reading.sensorType,
+      value: nonNegativeNumber(reading.value, `Sensor reading ${index + 1} value`),
+    };
+  });
+  return {
+    readings,
+    source: payload.source ?? 'manual',
+  };
+}
+
+export function validateShiftHandoverPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw validationError('Shift-handover request body must be a JSON object');
+  }
+  if (!SHIFT_TYPES.includes(payload.shift)) {
+    throw validationError(`Shift handover shift must be one of: ${SHIFT_TYPES.join(', ')}`);
+  }
+  return {
+    shift: payload.shift,
+    summary: phase6Text(payload.summary, 'Shift handover summary', {
+      required: true,
+      maxLength: 4000,
+    }),
+    notes: phase6Text(payload.notes, 'Shift handover notes', { maxLength: 4000 }),
+  };
 }

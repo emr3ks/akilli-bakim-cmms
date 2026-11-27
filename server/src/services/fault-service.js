@@ -8,6 +8,7 @@ import {
 } from '../repositories/faults.js';
 import { validateFaultPayload } from '../validators.js';
 import { generateDocumentCode } from './document-code.js';
+import { createNotification } from './notification-service.js';
 
 export async function getFaultOrThrow(database, faultId, user) {
   const fault = await findFaultById(database, faultId);
@@ -52,6 +53,14 @@ export async function createFault(database, payload, user) {
 
     if (data.urgency === 'critical') {
       await setMachineStatus(database, machine.id, 'faulted');
+      await createNotification(database, {
+        type: 'critical_fault',
+        title: `${machine.code} kritik arıza bildirimi`,
+        message: `${fault.code}: ${fault.title}`,
+        severity: 'critical',
+        dedupeKey: `critical-fault:${fault.id}`,
+        createdAt: fault.createdAt,
+      });
     }
 
     return findFaultById(database, fault.id);
