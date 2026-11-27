@@ -318,6 +318,42 @@ export const DEMO_FAULTS = [
     status: 'resolved',
     createdAt: '2026-11-20T07:30:00.000Z',
   },
+  {
+    code: 'ARZ-2026-006',
+    machineCode: 'MCH-2026-003',
+    title: 'Kompresör soğutma fanı titreşimi arttı',
+    category: 'mechanical',
+    urgency: 'medium',
+    description: 'Fan rulmanından gelen titreşim eşiği aştı ve fan milinde eksen kayması ölçüldü.',
+    photo: null,
+    reportedBy: 3,
+    status: 'resolved',
+    createdAt: '2026-09-10T08:00:00.000Z',
+  },
+  {
+    code: 'ARZ-2026-007',
+    machineCode: 'MCH-2026-003',
+    title: 'Kompresör yağ filtresi tıkandı',
+    category: 'mechanical',
+    urgency: 'high',
+    description: 'Filtre diferansiyel basıncı yükseldi ve ünitede koruyucu durdurma gerçekleşti.',
+    photo: null,
+    reportedBy: 3,
+    status: 'resolved',
+    createdAt: '2026-10-12T08:00:00.000Z',
+  },
+  {
+    code: 'ARZ-2026-008',
+    machineCode: 'MCH-2026-003',
+    title: 'Kompresör yağ sıcaklığı sensörü kararsız okudu',
+    category: 'software_sensor',
+    urgency: 'low',
+    description: 'Sıcaklık sensörü ani sıçramalar gösterdi; analog sinyal kablosu yeniden sonlandırıldı.',
+    photo: null,
+    reportedBy: 3,
+    status: 'resolved',
+    createdAt: '2026-11-02T08:00:00.000Z',
+  },
 ];
 
 export const DEMO_WORK_ORDERS = [
@@ -372,6 +408,51 @@ export const DEMO_WORK_ORDERS = [
     solutionPhoto: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
     closedAt: '2026-11-20T09:30:00.000Z',
     createdAt: '2026-11-20T07:45:00.000Z',
+  },
+  {
+    code: 'IE-2026-006',
+    faultCode: 'ARZ-2026-006',
+    assignedTo: 2,
+    status: 'closed',
+    createdBy: 1,
+    assignedAt: '2026-09-10T08:10:00.000Z',
+    startedAt: '2026-09-10T08:15:00.000Z',
+    interventionNote: 'Fan rulmanı yenilendi, mil hizası kontrol edildi ve titreşim ölçümü yapıldı.',
+    rootCause: 'Fan rulmanı yatak aşınması',
+    durationMinutes: 45,
+    solutionPhoto: null,
+    closedAt: '2026-09-10T09:00:00.000Z',
+    createdAt: '2026-09-10T08:05:00.000Z',
+  },
+  {
+    code: 'IE-2026-007',
+    faultCode: 'ARZ-2026-007',
+    assignedTo: 2,
+    status: 'closed',
+    createdBy: 1,
+    assignedAt: '2026-10-12T08:10:00.000Z',
+    startedAt: '2026-10-12T08:20:00.000Z',
+    interventionNote: 'Yağ filtresi değiştirildi, filtre hattı temizlendi ve basınç testi tamamlandı.',
+    rootCause: 'Filtre elemanının tıkanması ve zamanında değiştirilmemesi',
+    durationMinutes: 90,
+    solutionPhoto: null,
+    closedAt: '2026-10-12T09:50:00.000Z',
+    createdAt: '2026-10-12T08:05:00.000Z',
+  },
+  {
+    code: 'IE-2026-008',
+    faultCode: 'ARZ-2026-008',
+    assignedTo: 2,
+    status: 'closed',
+    createdBy: 1,
+    assignedAt: '2026-11-02T08:10:00.000Z',
+    startedAt: '2026-11-02T08:15:00.000Z',
+    interventionNote: 'Sensör kablosu yeniden sonlandırıldı, sıcaklık karşılaştırması yapıldı ve alarm testi geçti.',
+    rootCause: 'Analog sinyal kablosunda gevşek temas',
+    durationMinutes: 60,
+    solutionPhoto: null,
+    closedAt: '2026-11-02T09:15:00.000Z',
+    createdAt: '2026-11-02T08:05:00.000Z',
   },
 ];
 
@@ -457,6 +538,22 @@ export const DEMO_PREVENTIVE_PLANS = [
       { title: 'Taşıma motoru yağını kontrol et' },
       { title: 'Rulman sıcaklığını ölç', measurementLabel: 'Sıcaklık (°C)' },
       { title: 'Emniyet switchlerini test et' },
+    ],
+  },
+];
+
+export const DEMO_PREVENTIVE_EXECUTIONS = [
+  {
+    code: 'PB-2026-001-H001',
+    planCode: 'PB-2026-001',
+    completedBy: 2,
+    completedAt: '2026-11-17T07:30:00.000Z',
+    notes: 'Spindle yağlaması yapıldı, titreşim ölçüldü ve kaçak kontrolü temiz geçti.',
+    nextDueDate: '2026-11-24',
+    results: [
+      { title: 'Spindle yağ seviyesini kontrol et', measurementValue: 82, note: 'Yağ seviyesi normal.' },
+      { title: 'Spindle titreşim seviyesini ölç', measurementValue: 2.4, note: 'Eşik altında.' },
+      { title: 'Soğutma ve yağ kaçağını kontrol et', measurementValue: null, note: 'Kaçak görülmedi.' },
     ],
   },
 ];
@@ -599,6 +696,7 @@ export async function seedDemoData(database) {
 
     const demoToday = todayPlantDate();
     const preventivePlanIds = new Map();
+    const preventiveChecklistItemIds = new Map();
     for (const plan of DEMO_PREVENTIVE_PLANS) {
       const nextDueDate = addUtcDays(demoToday, plan.dueOffsetDays);
       const result = await run(
@@ -627,12 +725,13 @@ export async function seedDemoData(database) {
       preventivePlanIds.set(plan.code, result.lastID);
 
       for (const [index, item] of plan.checklist.entries()) {
-        await run(
+        const itemResult = await run(
           database,
           `INSERT INTO maintenance_checklist_items (plan_id, position, title, measurement_label)
            VALUES (?, ?, ?, ?)`,
           [result.lastID, index + 1, item.title, item.measurementLabel ?? null],
         );
+        preventiveChecklistItemIds.set(`${plan.code}:${item.title}`, itemResult.lastID);
       }
 
       if (plan.frequency === 'working_hours') {
@@ -644,6 +743,56 @@ export async function seedDemoData(database) {
           [machineIds.get(plan.machineCode), plan.runtimeHours, timestamp, plan.assignedTo],
         );
       }
+    }
+
+    for (const execution of DEMO_PREVENTIVE_EXECUTIONS) {
+      const planId = preventivePlanIds.get(execution.planCode);
+      if (!planId) throw new Error(`Seeded preventive plan not found: ${execution.planCode}`);
+      const executionResult = await run(
+        database,
+        `INSERT INTO maintenance_executions
+          (code, plan_id, completed_by, completed_at, notes, runtime_hours,
+           next_due_date, next_due_runtime_hours)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, NULL)`,
+        [
+          execution.code,
+          planId,
+          execution.completedBy,
+          execution.completedAt,
+          execution.notes,
+          execution.nextDueDate,
+        ],
+      );
+
+      for (const result of execution.results) {
+        const checklistItemId = preventiveChecklistItemIds.get(
+          `${execution.planCode}:${result.title}`,
+        );
+        if (!checklistItemId) {
+          throw new Error(`Seeded checklist item not found: ${execution.planCode} / ${result.title}`);
+        }
+        await run(
+          database,
+          `INSERT INTO maintenance_execution_items
+            (execution_id, checklist_item_id, title, completed, measurement_value, note)
+           VALUES (?, ?, ?, 1, ?, ?)`,
+          [
+            executionResult.lastID,
+            checklistItemId,
+            result.title,
+            result.measurementValue,
+            result.note,
+          ],
+        );
+      }
+
+      await run(
+        database,
+        `UPDATE maintenance_plans
+         SET last_completed_at = ?, updated_at = ?
+         WHERE id = ?`,
+        [execution.completedAt, execution.completedAt, planId],
+      );
     }
 
     const sparePartByCode = new Map(
@@ -749,6 +898,7 @@ export async function seedDemoData(database) {
     faults: DEMO_FAULTS.length,
     workOrders: DEMO_WORK_ORDERS.length,
     preventivePlans: DEMO_PREVENTIVE_PLANS.length,
+    preventiveExecutions: DEMO_PREVENTIVE_EXECUTIONS.length,
     spareParts: DEMO_SPARE_PARTS.length,
     stockUsages: DEMO_STOCK_USAGES.length,
     stockMovements: DEMO_SPARE_PARTS.filter((part) => part.initialStock > 0).length

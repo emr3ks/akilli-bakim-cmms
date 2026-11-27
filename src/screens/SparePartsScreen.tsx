@@ -362,6 +362,7 @@ export function SparePartsScreen({ user }: SparePartsScreenProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sectionWarning, setSectionWarning] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [formVisible, setFormVisible] = useState(false);
   const [editingPart, setEditingPart] = useState<SparePart | null>(null);
@@ -371,19 +372,31 @@ export function SparePartsScreen({ user }: SparePartsScreenProps) {
     if (refresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
+    setSectionWarning(null);
     try {
       if (view === 'catalog') {
         const filters: SparePartFilters = { q: query, category, status };
         const response = await api.getSpareParts(user.id, filters);
         setParts(response.parts);
       } else if (view === 'alerts') {
-        const [alertResponse, partResponse] = await Promise.all([
+        const [alertResult, partResult] = await Promise.allSettled([
           api.getStockAlerts(user.id),
           api.getSpareParts(user.id),
         ]);
-        setAlerts(alertResponse.alerts);
-        setAlertCount(alertResponse.count);
-        setParts(partResponse.parts);
+        if (alertResult.status === 'fulfilled') {
+          setAlerts(alertResult.value.alerts);
+          setAlertCount(alertResult.value.count);
+        } else {
+          setAlerts([]);
+          setAlertCount(0);
+          setError(alertResult.reason instanceof Error
+            ? alertResult.reason.message
+            : 'Kritik stok uyarıları alınamadı.');
+        }
+        setParts(partResult.status === 'fulfilled' ? partResult.value.parts : []);
+        if (partResult.status === 'rejected') {
+          setSectionWarning('Parça kataloğu yüklenemedi; uyarı listesi kullanılabilir durumda.');
+        }
       } else {
         const response = await api.getStockMovements(user.id);
         setMovements(response.movements);
@@ -707,6 +720,7 @@ export function SparePartsScreen({ user }: SparePartsScreenProps) {
         ) : null}
 
         {actionMessage ? <Text style={styles.actionMessage}>{actionMessage}</Text> : null}
+        {sectionWarning ? <Text style={styles.sectionWarning}>{sectionWarning}</Text> : null}
         {loading && !hasContent ? <LoadingState label="Yedek parça verileri hazırlanıyor…" /> : null}
         {!loading && error ? <ErrorState message={error} onRetry={() => void load()} /> : null}
 
@@ -832,6 +846,7 @@ const styles = StyleSheet.create({
   movementMeta: { ...typography.caption, color: colors.inkMuted, flexShrink: 1 },
   referenceText: { ...typography.caption, color: colors.primaryDark, fontWeight: '700' },
   actionMessage: { ...typography.caption, color: colors.primaryDark, backgroundColor: colors.primarySoft, borderRadius: radius.sm, padding: spacing.md },
+  sectionWarning: { ...typography.caption, color: colors.warning, backgroundColor: colors.warningSoft, borderRadius: radius.sm, padding: spacing.md },
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(10, 27, 51, 0.52)' },
   modalSheet: { width: '100%', maxWidth: 720, alignSelf: 'center', maxHeight: '90%', backgroundColor: colors.background, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, overflow: 'hidden', ...shadow },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md, padding: spacing.lg, backgroundColor: colors.surface },

@@ -1,3 +1,7 @@
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
+import { apiConfigurationErrorMessage, resolveApiBaseUrl } from './apiConfiguration';
 import type {
   DashboardSummary,
   Fault,
@@ -6,7 +10,9 @@ import type {
   Machine,
   MachineFilters,
   MachineInput,
+  MachineMaintenanceHistory,
   MachineRecord,
+  MaintenanceAnalytics,
   PreventiveCompletion,
   PreventiveCompletionInput,
   PreventivePlan,
@@ -14,6 +20,7 @@ import type {
   PreventivePlanInput,
   PartUsage,
   RecordType,
+  ServiceReport,
   SparePart,
   SparePartFilters,
   SparePartInput,
@@ -28,7 +35,16 @@ import type {
 } from './types';
 
 const configuredBaseUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-export const API_BASE_URL = (configuredBaseUrl || 'http://localhost:3006/api').replace(/\/$/, '');
+const configuredApiPort = Number(process.env.EXPO_PUBLIC_API_PORT || 3006);
+
+export const API_BASE_URL = resolveApiBaseUrl({
+  platform: Platform.OS === 'web' ? 'web' : 'native',
+  configuredUrl: configuredBaseUrl,
+  hostUri: Constants.expoConfig?.hostUri,
+  port: configuredApiPort,
+});
+
+export const API_CONFIGURATION_ERROR = apiConfigurationErrorMessage(API_BASE_URL);
 
 export class ApiError extends Error {
   status: number;
@@ -48,17 +64,35 @@ type RequestOptions = Omit<RequestInit, 'body'> & {
 };
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (!API_BASE_URL) {
+    throw new ApiError(
+      API_CONFIGURATION_ERROR || 'API adresi yapılandırılmadı.',
+      503,
+      'API_URL_NOT_CONFIGURED',
+    );
+  }
+
   const { body, userId, headers, ...init } = options;
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      ...(userId ? { 'x-user-id': String(userId) } : {}),
-      ...headers,
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        Accept: 'application/json',
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(userId ? { 'x-user-id': String(userId) } : {}),
+        ...headers,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (reason) {
+    const detail = reason instanceof Error ? reason.message : 'Ağ bağlantısı kurulamadı.';
+    throw new ApiError(
+      `CMMS API'ye bağlanılamadı (${API_BASE_URL}). ${detail} Fiziksel iOS cihazda EXPO_PUBLIC_API_URL değerinin bilgisayarın LAN IP adresini içerdiğini doğrulayın.`,
+      0,
+      'NETWORK_ERROR',
+    );
+  }
 
   const text = await response.text();
   let payload: unknown = null;
@@ -324,6 +358,20 @@ export const api = {
   login: (userId: number) => request<{ user: User }>('/auth/login', { method: 'POST', body: { userId } }),
   getDashboard: (userId: number) =>
     request<DashboardSummary>('/dashboard/summary', { userId }),
+  getMaintenanceAnalytics: (userId: number) =>
+    request<{ analytics: MaintenanceAnalytics }>('/analytics/maintenance', { userId }),
+  getMachineMaintenanceHistory: (userId: number, machineId: number) =>
+    request<MachineMaintenanceHistory>(`/machines/${machineId}/maintenance-history`, { userId }),
+  getWorkOrderServiceReport: (userId: number, workOrderId: number) =>
+    request<{ report: ServiceReport }>(`/work-orders/${workOrderId}/service-report`, { userId }),
+  getPreventiveServiceReport: (
+    userId: number,
+    planId: number,
+    executionId: number,
+  ) => request<{ report: ServiceReport }>(
+    `/preventive-plans/${planId}/completions/${executionId}/service-report`,
+    { userId },
+  ),
   getMachines: (userId: number, filters: MachineFilters = {}) =>
     request<{ machines: Machine[] }>(`/machines${toQuery(filters)}`, { userId }),
   getMachine: (userId: number, id: number) =>

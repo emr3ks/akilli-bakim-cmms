@@ -15,6 +15,8 @@ import {
 import { api } from '../api';
 import { PartUsageModal } from '../components/PartUsageModal';
 import { PhotoPicker, type SelectedPhoto } from '../components/PhotoPicker';
+import { formatDateTime } from '../format';
+import { exportServiceReportPdf, printServiceReport } from '../serviceReportPrinting';
 import { formatCurrency } from '../spareParts';
 import { colors, radius, shadow, spacing, typography } from '../theme';
 import type {
@@ -316,6 +318,9 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sectionWarning, setSectionWarning] = useState<string | null>(null);
+  const [printingReportId, setPrintingReportId] = useState<number | null>(null);
+  const [exportingReportId, setExportingReportId] = useState<number | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [createFault, setCreateFault] = useState<Fault | null>(null);
   const [assignWorkOrder, setAssignWorkOrder] = useState<WorkOrder | null>(null);
@@ -326,8 +331,9 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
     if (refresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
+    setSectionWarning(null);
     try {
-      const [faultResponse, workOrderResponse, userResponse] = await Promise.all([
+      const [faultResult, workOrderResult, userResult] = await Promise.allSettled([
         api.getFaults(user.id, {
           status: faultStatus,
           urgency,
@@ -340,9 +346,25 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
         }),
         api.getDemoUsers(),
       ]);
-      setFaults(faultResponse.faults);
-      setWorkOrders(workOrderResponse.workOrders);
-      setTechnicians(userResponse.users.filter((candidate) => candidate.role === 'technician'));
+
+      setFaults(faultResult.status === 'fulfilled' ? faultResult.value.faults : []);
+      setWorkOrders(workOrderResult.status === 'fulfilled' ? workOrderResult.value.workOrders : []);
+      setTechnicians(userResult.status === 'fulfilled'
+        ? userResult.value.users.filter((candidate) => candidate.role === 'technician')
+        : []);
+
+      if (faultResult.status === 'rejected' && workOrderResult.status === 'rejected') {
+        const reason = faultResult.reason instanceof Error
+          ? faultResult.reason.message
+          : 'Arıza ve iş emri kayıtları alınamadı.';
+        setError(reason);
+      } else if (
+        faultResult.status === 'rejected'
+        || workOrderResult.status === 'rejected'
+        || userResult.status === 'rejected'
+      ) {
+        setSectionWarning('Bazı kayıt grupları yüklenemedi; erişilebilen diğer kayıtlar kullanılabilir durumda.');
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Arıza ve iş emri kayıtları alınamadı.');
     } finally {
@@ -403,6 +425,34 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
     await load(true);
   };
 
+  const printServiceForm = async (workOrder: WorkOrder) => {
+    setPrintingReportId(workOrder.id);
+    setActionMessage(null);
+    try {
+      const response = await api.getWorkOrderServiceReport(user.id, workOrder.id);
+      await printServiceReport(response.report);
+      setActionMessage(`${workOrder.code} servis formu yazdırılmaya hazırlandı.`);
+    } catch (reason) {
+      setActionMessage(reason instanceof Error ? reason.message : 'Servis formu oluşturulamadı.');
+    } finally {
+      setPrintingReportId(null);
+    }
+  };
+
+  const exportServiceForm = async (workOrder: WorkOrder) => {
+    setExportingReportId(workOrder.id);
+    setActionMessage(null);
+    try {
+      const response = await api.getWorkOrderServiceReport(user.id, workOrder.id);
+      const uri = await exportServiceReportPdf(response.report);
+      setActionMessage(`${workOrder.code} PDF servis formu hazırlandı: ${uri}`);
+    } catch (reason) {
+      setActionMessage(reason instanceof Error ? reason.message : 'PDF servis formu oluşturulamadı.');
+    } finally {
+      setExportingReportId(null);
+    }
+  };
+
   const renderFault = (fault: Fault) => {
     const palette = urgencyPalette(fault.urgency);
     return (
@@ -430,7 +480,7 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
           <Text style={styles.photoMeta}>Fotoğraf eklendi · ayrıntı kaydında görüntülenir</Text>
         ) : null}
         <View style={styles.cardFooter}>
-          <Text style={styles.footerText}>{fault.reportedBy.name} · {new Date(fault.createdAt).toLocaleDateString('tr-TR')}</Text>
+          <Text style={styles.footerText}>{fault.reportedBy.name} · {formatDateTime(fault.createdAt)}</Text>
           {fault.workOrder ? (
             <Text style={styles.workOrderLink}>{fault.workOrder.code} · {workOrderStatusLabels[fault.workOrder.status]}</Text>
           ) : null}
@@ -493,6 +543,26 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
           <Image source={{ uri: workOrder.solutionPhoto }} style={styles.faultPhoto} resizeMode="cover" />
         ) : workOrder.hasSolutionPhoto ? (
           <Text style={styles.photoMeta}>Çözüm fotoğrafı eklendi</Text>
+        ) : null}
+        {['resolved', 'closed'].includes(workOrder.status) ? (
+          <View style={styles.reportActions}>
+            <Button
+              title="Servis Formu Yazdır / PDF"
+              onPress={() => void printServiceForm(workOrder)}
+              loading={printingReportId === workOrder.id}
+              variant="secondary"
+              style={styles.reportAction}
+              testID={`work-order-service-report-${workOrder.code}`}
+            />
+            <Button
+              title="PDF Dosyası Paylaş"
+              onPress={() => void exportServiceForm(workOrder)}
+              loading={exportingReportId === workOrder.id}
+              variant="ghost"
+              style={styles.reportAction}
+              testID={`work-order-service-pdf-${workOrder.code}`}
+            />
+          </View>
         ) : null}
         {canManageParts ? (
           <Button
@@ -597,6 +667,7 @@ export function WorkOrdersScreen({ user }: WorkOrdersScreenProps) {
         </View>
 
         {actionMessage ? <Text style={styles.actionMessage}>{actionMessage}</Text> : null}
+        {sectionWarning ? <Text style={styles.sectionWarning}>{sectionWarning}</Text> : null}
         {loading && faults.length === 0 && workOrders.length === 0 ? <LoadingState label="Arıza ve iş emri kayıtları hazırlanıyor…" /> : null}
         {!loading && error ? <ErrorState message={error} onRetry={() => void load()} /> : null}
 
@@ -705,8 +776,11 @@ const styles = StyleSheet.create({
   evidenceText: { ...typography.body, color: colors.ink },
   evidenceMeta: { ...typography.caption, color: colors.inkMuted },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  reportActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
+  reportAction: { flexGrow: 1, minWidth: 180 },
   actionButton: { flexGrow: 1, minWidth: 140 },
   actionMessage: { ...typography.caption, color: colors.primaryDark, backgroundColor: colors.primarySoft, borderRadius: radius.sm, padding: spacing.md },
+  sectionWarning: { ...typography.caption, color: colors.warning, backgroundColor: colors.warningSoft, borderRadius: radius.sm, padding: spacing.md },
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(10, 27, 51, 0.52)' },
   modalSheet: { width: '100%', maxWidth: 720, alignSelf: 'center', maxHeight: '90%', backgroundColor: colors.background, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, overflow: 'hidden', ...shadow },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md, padding: spacing.lg, backgroundColor: colors.surface },

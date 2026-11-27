@@ -55,18 +55,29 @@ export function PartUsageModal({
     setLoading(true);
     setError(null);
     try {
-      const [partResponse, usageResponse] = await Promise.all([
+      const [partResult, usageResult] = await Promise.allSettled([
         api.getSpareParts(userId),
         ownerType === 'workOrder'
           ? api.getWorkOrderParts(userId, ownerId)
           : api.getPreventivePlanParts(userId, ownerId),
       ]);
-      setParts(partResponse.parts);
-      setUsages(usageResponse.parts);
-      setTotalCost(usageResponse.totalCost);
-      setDraftQuantities(Object.fromEntries(
-        usageResponse.parts.map((usage) => [usage.id, String(usage.quantity)]),
-      ));
+      setParts(partResult.status === 'fulfilled' ? partResult.value.parts : []);
+      if (usageResult.status === 'fulfilled') {
+        setUsages(usageResult.value.parts);
+        setTotalCost(usageResult.value.totalCost);
+        setDraftQuantities(Object.fromEntries(
+          usageResult.value.parts.map((usage) => [usage.id, String(usage.quantity)]),
+        ));
+      } else {
+        setUsages([]);
+        setTotalCost(0);
+        setError(usageResult.reason instanceof Error
+          ? usageResult.reason.message
+          : 'Parça kullanımları alınamadı.');
+      }
+      if (partResult.status === 'rejected') {
+        setError('Parça kataloğu yüklenemedi; mevcut kullanım kayıtları korunuyor.');
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Parça kullanımları alınamadı.');
     } finally {
@@ -84,12 +95,12 @@ export function PartUsageModal({
   }, [load, visible]);
 
   const filteredParts = useMemo(() => {
-    const normalized = search.trim().toLocaleLowerCase('tr');
+    const normalized = search.trim().toLowerCase();
     if (!normalized) return parts.slice(0, 6);
     return parts.filter((part) => (
-      part.code.toLocaleLowerCase('tr').includes(normalized)
-      || part.name.toLocaleLowerCase('tr').includes(normalized)
-      || sparePartCategoryLabels[part.category].toLocaleLowerCase('tr').includes(normalized)
+      part.code.toLowerCase().includes(normalized)
+      || part.name.toLowerCase().includes(normalized)
+      || sparePartCategoryLabels[part.category].toLowerCase().includes(normalized)
     )).slice(0, 6);
   }, [parts, search]);
 

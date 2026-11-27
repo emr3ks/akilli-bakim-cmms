@@ -9,18 +9,25 @@ import {
   Text,
   View,
 } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
-
 import { api } from '../api';
 import { MeknivoLogo } from '../brand/MeknivoLogo';
 import { FaultReportModal } from '../components/FaultReportModal';
+import { QRCodeView } from '../components/QRCodeView';
+import { formatDate, formatDateTime } from '../format';
 import { exportMachineCardPdf, printMachineCard } from '../printing';
 import { colors, radius, spacing, typography } from '../theme';
-import type { Fault, Machine, MachineRecord, User } from '../types';
+import type {
+  Fault,
+  Machine,
+  MachineRecord,
+  MaintenanceHistoryEntry,
+  User,
+} from '../types';
 import {
   Button,
   Card,
   CriticalityBadge,
+  EmptyState,
   ErrorState,
   FormField,
   InfoRow,
@@ -39,24 +46,22 @@ interface MachineDetailScreenProps {
   onDeleted: (machineId: number) => void;
 }
 
-function formatDate(value: string): string {
-  try {
-    return new Intl.DateTimeFormat('tr-TR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(value));
-  } catch {
-    return value;
-  }
-}
+const historyTypeLabels: Record<MaintenanceHistoryEntry['type'], string> = {
+  fault: 'Arıza',
+  work_order: 'İş emri',
+  preventive: 'Periyodik bakım',
+  part_change: 'Yedek parça',
+  maintenance_record: 'Bakım kaydı',
+};
 
 export function MachineDetailScreen({ machine, user, onClose, onChanged, onDeleted }: MachineDetailScreenProps) {
   const [current, setCurrent] = useState(machine);
   const [records, setRecords] = useState<MachineRecord[]>([]);
   const [phaseTwoFaults, setPhaseTwoFaults] = useState<Fault[]>([]);
+  const [historyEntries, setHistoryEntries] = useState<MaintenanceHistoryEntry[]>([]);
+  const [detailTab, setDetailTab] = useState<'overview' | 'history'>('overview');
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [sectionWarning, setSectionWarning] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [description, setDescription] = useState('');
@@ -69,25 +74,61 @@ export function MachineDetailScreen({ machine, user, onClose, onChanged, onDelet
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setSectionWarning(null);
+    setHistoryError(null);
     try {
-      const [machineResponse, maintenanceResponse, faultResponse, phaseTwoResponse] = await Promise.all([
+      const [machineResult, maintenanceResult, legacyFaultResult, faultResult, historyResult] = await Promise.allSettled([
         api.getMachine(user.id, machine.id),
         api.getRecords(user.id, machine.id, 'maintenance'),
         api.getRecords(user.id, machine.id, 'fault'),
         api.getFaults(user.id, { machineId: machine.id }),
+        user.role === 'operator'
+          ? Promise.resolve(null)
+          : api.getMachineMaintenanceHistory(user.id, machine.id),
       ]);
-      setCurrent(machineResponse.machine);
-      setRecords([...maintenanceResponse.records, ...faultResponse.records].sort(
+
+      if (machineResult.status === 'fulfilled') {
+        setCurrent(machineResult.value.machine);
+        onChanged(machineResult.value.machine);
+      } else {
+        setError(machineResult.reason instanceof Error
+          ? machineResult.reason.message
+          : 'Makine detayları alınamadı.');
+      }
+
+      const maintenanceRecords = maintenanceResult.status === 'fulfilled'
+        ? maintenanceResult.value.records
+        : [];
+      const legacyFaultRecords = legacyFaultResult.status === 'fulfilled'
+        ? legacyFaultResult.value.records
+        : [];
+      setRecords([...maintenanceRecords, ...legacyFaultRecords].sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       ));
-      setPhaseTwoFaults(phaseTwoResponse.faults);
-      onChanged(machineResponse.machine);
+      setPhaseTwoFaults(faultResult.status === 'fulfilled' ? faultResult.value.faults : []);
+
+      const auxiliaryFailures = [
+        maintenanceResult.status === 'rejected' ? maintenanceResult.reason : null,
+        legacyFaultResult.status === 'rejected' ? legacyFaultResult.reason : null,
+        faultResult.status === 'rejected' ? faultResult.reason : null,
+      ].filter(Boolean);
+      if (auxiliaryFailures.length) {
+        setSectionWarning('Bazı geçmiş kayıtları yüklenemedi; diğer makine bilgileri kullanılabilir durumda.');
+      }
+
+      if (historyResult.status === 'fulfilled' && historyResult.value) {
+        setHistoryEntries(historyResult.value.entries);
+      } else if (historyResult.status === 'rejected') {
+        setHistoryError(historyResult.reason instanceof Error
+          ? historyResult.reason.message
+          : 'Makine bakım geçmişi alınamadı.');
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Makine detayları alınamadı.');
     } finally {
       setLoading(false);
     }
-  }, [machine.id, onChanged, user.id]);
+  }, [machine.id, onChanged, user.id, user.role]);
 
   useEffect(() => {
     void load();
@@ -183,6 +224,77 @@ export function MachineDetailScreen({ machine, user, onClose, onChanged, onDelet
           {user.role === 'admin' ? <Button title="Düzenle" onPress={() => setFormVisible(true)} variant="secondary" compact /> : null}
         </View>
 
+        {error ? (
+          <View style={styles.inlineWarning}>
+            <Text style={styles.inlineWarningText}>{error}</Text>
+            <Button title="Tekrar dene" onPress={() => void load()} variant="secondary" compact />
+          </View>
+        ) : null}
+        {sectionWarning ? <Text style={styles.sectionWarning}>{sectionWarning}</Text> : null}
+
+        {user.role !== 'operator' ? (
+          <View style={styles.detailTabs} accessibilityRole="tablist">
+            <Pressable
+              accessibilityRole="tab"
+              accessibilityState={{ selected: detailTab === 'overview' }}
+              testID="machine-detail-tab-overview"
+              onPress={() => setDetailTab('overview')}
+              style={[styles.detailTab, detailTab === 'overview' && styles.detailTabActive]}
+            >
+              <Text style={[styles.detailTabText, detailTab === 'overview' && styles.detailTabTextActive]}>Genel</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="tab"
+              accessibilityState={{ selected: detailTab === 'history' }}
+              testID="machine-detail-tab-history"
+              onPress={() => setDetailTab('history')}
+              style={[styles.detailTab, detailTab === 'history' && styles.detailTabActive]}
+            >
+              <Text style={[styles.detailTabText, detailTab === 'history' && styles.detailTabTextActive]}>Makine Bakım Geçmişi</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {detailTab === 'history' && user.role !== 'operator' ? (
+          <View style={styles.historyContent} testID="machine-maintenance-history">
+            <Card>
+              <SectionTitle title="Kronolojik bakım kayıtları" />
+              <Text style={styles.cardDescription}>
+                Arızalar, iş emirleri, periyodik bakımlar ve değişen yedek parçaları tek zaman akışında gösterilir.
+              </Text>
+              {historyError ? (
+                <ErrorState message={historyError} onRetry={() => void load()} />
+              ) : historyEntries.length === 0 ? (
+                <EmptyState title="Henüz bakım geçmişi yok" description="Bu makine için kayıtlı arıza, iş emri veya periyodik bakım bulunmuyor." />
+              ) : (
+                <View style={styles.historyList}>
+                  {historyEntries.map((entry) => (
+                    <View key={entry.id} style={styles.historyItem}>
+                      <View style={styles.historyHeader}>
+                        <Text style={styles.historyType}>{historyTypeLabels[entry.type]}</Text>
+                        <Text style={styles.historyDate}>{formatDateTime(entry.occurredAt)}</Text>
+                      </View>
+                      <View style={styles.historyTitleRow}>
+                        {entry.code ? <Text style={styles.historyCode}>{entry.code}</Text> : null}
+                        <Text style={styles.historyTitle}>{entry.title}</Text>
+                      </View>
+                      {entry.description ? <Text style={styles.historyDescription}>{entry.description}</Text> : null}
+                      {entry.rootCause ? <Text style={styles.historyMeta}>Kök neden: {entry.rootCause}</Text> : null}
+                      {entry.durationMinutes !== undefined && entry.durationMinutes !== null ? (
+                        <Text style={styles.historyMeta}>Müdahale süresi: {entry.durationMinutes} dk</Text>
+                      ) : null}
+                      {entry.partCost !== undefined ? (
+                        <Text style={styles.historyMeta}>Parça maliyeti: {entry.partCost.toFixed(2)} ₺</Text>
+                      ) : null}
+                      {entry.contextCode ? <Text style={styles.historyMeta}>Bağlam: {entry.contextCode}</Text> : null}
+                    </View>
+                  ))}
+                </View>
+              )}
+            </Card>
+          </View>
+        ) : (
+          <>
         <View style={styles.heroCard}>
           <View style={styles.heroCopy}>
             <Text style={styles.machineName}>{current.name}</Text>
@@ -321,7 +433,7 @@ export function MachineDetailScreen({ machine, user, onClose, onChanged, onDelet
             <Card style={styles.qrCard}>
               <Text style={styles.qrTitle}>Makine QR kimliği</Text>
               <View style={styles.qrFrame}>
-                <QRCode value={current.qrCode || current.code} size={210} quietZone={4} color={colors.ink} backgroundColor={colors.white} />
+                <QRCodeView value={current.qrCode || current.code} size={210} />
               </View>
               <Text style={styles.qrCode}>{current.qrCode || current.code}</Text>
               <Text style={styles.qrHelp}>Bu kodu okutarak makine kartına hızlıca ulaşın.</Text>
@@ -338,6 +450,8 @@ export function MachineDetailScreen({ machine, user, onClose, onChanged, onDelet
             ) : null}
           </View>
         </View>
+          </>
+        )}
       </ScrollView>
 
       <FaultReportModal
@@ -373,6 +487,25 @@ const styles = StyleSheet.create({
   topCopy: { flex: 1 },
   topEyebrow: { ...typography.caption, color: colors.primary, fontWeight: '900', letterSpacing: 1 },
   topCode: { ...typography.heading, color: colors.ink },
+  inlineWarning: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: spacing.md },
+  inlineWarningText: { ...typography.caption, color: colors.danger, flexGrow: 1, flexBasis: 220 },
+  sectionWarning: { ...typography.caption, color: colors.warning, backgroundColor: colors.warningSoft, borderRadius: radius.md, padding: spacing.md },
+  detailTabs: { flexDirection: 'row', backgroundColor: colors.neutralSoft, borderRadius: radius.md, padding: 4, gap: 4 },
+  detailTab: { flex: 1, minHeight: 44, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm },
+  detailTabActive: { backgroundColor: colors.surface },
+  detailTabText: { ...typography.caption, color: colors.inkMuted, fontWeight: '800', textAlign: 'center' },
+  detailTabTextActive: { color: colors.primaryDark },
+  historyContent: { gap: spacing.md },
+  historyList: { gap: spacing.sm },
+  historyItem: { gap: 5, paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  historyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  historyType: { ...typography.caption, color: colors.primaryDark, fontWeight: '900', textTransform: 'uppercase' },
+  historyDate: { ...typography.caption, color: colors.inkMuted },
+  historyTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
+  historyCode: { ...typography.caption, color: colors.primaryDark, fontWeight: '900' },
+  historyTitle: { ...typography.subheading, color: colors.ink, flexShrink: 1 },
+  historyDescription: { ...typography.body, color: colors.inkMuted },
+  historyMeta: { ...typography.caption, color: colors.inkMuted },
   heroCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.ink, borderRadius: radius.xl, padding: spacing.xl, gap: spacing.lg },
   heroCopy: { flex: 1, gap: spacing.sm },
   machineName: { ...typography.heading, color: colors.white },

@@ -77,6 +77,175 @@ export interface DashboardSummary {
   criticalStockParts: number;
 }
 
+export interface MaintenanceAnalyticsSummary {
+  machineCount: number;
+  failureCount: number;
+  closedWorkOrderCount: number;
+  totalInterventionMinutes: number;
+  mtbfMinutes: number | null;
+  mtbfHours: number | null;
+  mttrMinutes: number | null;
+  mttrHours: number | null;
+  workOrderSparePartCost: number;
+  preventiveSparePartCost: number;
+  totalSparePartCost: number;
+}
+
+export interface MachineMaintenanceMetrics {
+  machineId: number;
+  machineCode: string;
+  machineName: string;
+  line: string;
+  criticality: Criticality;
+  failureCount: number;
+  closedWorkOrderCount: number;
+  totalInterventionMinutes: number;
+  mttrMinutes: number | null;
+  mttrHours: number | null;
+  mtbfMinutes: number | null;
+  mtbfHours: number | null;
+  workOrderSparePartCost: number;
+  preventiveSparePartCost: number;
+  totalSparePartCost: number;
+}
+
+export interface MaintenanceAnalytics {
+  generatedAt: string;
+  summary: MaintenanceAnalyticsSummary;
+  faultCategories: {
+    category: FaultCategory;
+    count: number;
+    percentage: number;
+  }[];
+  topFailureMachines: MachineMaintenanceMetrics[];
+  machineMetrics: MachineMaintenanceMetrics[];
+  methodology: {
+    mtbf: string;
+    mttr: string;
+    cost: string;
+  };
+}
+
+export type MaintenanceHistoryEntryType =
+  | 'fault'
+  | 'work_order'
+  | 'preventive'
+  | 'part_change'
+  | 'maintenance_record';
+
+export interface MaintenanceHistoryEntry {
+  id: string;
+  recordId: number;
+  type: MaintenanceHistoryEntryType;
+  source?: string;
+  occurredAt: string;
+  code: string | null;
+  title: string;
+  description: string | null;
+  status: string;
+  category?: FaultCategory;
+  urgency?: FaultUrgency;
+  reportedBy?: string;
+  faultId?: number;
+  faultCode?: string;
+  rootCause?: string | null;
+  durationMinutes?: number | null;
+  technician?: string | null;
+  partCost?: number;
+  originalCost?: number;
+  planCode?: string;
+  runtimeHours?: number | null;
+  nextDueDate?: string;
+  results?: {
+    title: string;
+    completed: boolean;
+    measurementValue: number | null;
+    note: string | null;
+  }[];
+  quantity?: number;
+  unit?: string;
+  unitCost?: number;
+  contextType?: string;
+  contextId?: number | null;
+  contextCode?: string | null;
+  severity?: string | null;
+}
+
+export interface MachineMaintenanceHistory {
+  machine: Machine;
+  entries: MaintenanceHistoryEntry[];
+  truncated: boolean;
+}
+
+export interface ServiceReportPart {
+  id: number;
+  partId: number;
+  code: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  totalCost: number;
+}
+
+export interface ServiceReport {
+  kind: 'work_order' | 'preventive';
+  documentCode: string;
+  title: string;
+  generatedAt: string;
+  machine: Machine;
+  workOrder?: {
+    id: number;
+    code: string;
+    status: WorkOrderStatus;
+    interventionNote: string | null;
+    rootCause: string | null;
+    durationMinutes: number | null;
+    assignedTo: { id: number; name: string; initials: string } | null;
+    startedAt: string | null;
+    closedAt: string | null;
+    createdAt: string;
+  };
+  fault?: {
+    id: number;
+    code: string;
+    title: string;
+    category: FaultCategory;
+    urgency: FaultUrgency;
+    description: string;
+    status: FaultStatus;
+    reportedBy: { id: number; name: string; initials: string };
+    createdAt: string;
+  };
+  preventive?: {
+    planId: number;
+    planCode: string;
+    name: string;
+    frequency: PreventiveFrequency;
+    assignedTo: { id: number; name: string; initials: string } | null;
+    completionId: number;
+    completionCode: string;
+    completedAt: string;
+    completedBy: { id: number; name: string; initials: string };
+    notes: string | null;
+    runtimeHours: number | null;
+    nextDueDate: string;
+    nextDueRuntimeHours: number | null;
+    results: {
+      itemId: number;
+      title: string;
+      completed: boolean;
+      measurementValue: number | null;
+      note: string | null;
+    }[];
+  };
+  parts: ServiceReportPart[];
+  partsScope: 'work_order' | 'preventive_plan';
+  totals: {
+    partsCost: number;
+  };
+}
+
 export interface SparePart {
   id: number;
   code: string;
@@ -400,6 +569,7 @@ export interface PreventiveCompletion {
   };
   completedAt: string;
   notes: string | null;
+  runtimeHours: number | null;
   nextDueDate: string;
   nextDueRuntimeHours: number | null;
   results: PreventiveChecklistResult[];

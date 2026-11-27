@@ -54,6 +54,12 @@ import {
   removeContextPart,
   updateContextPart,
 } from './services/stock-usage-service.js';
+import { getMaintenanceAnalytics } from './services/maintenance-analytics-service.js';
+import { getMachineMaintenanceHistory } from './services/maintenance-history-service.js';
+import {
+  getPreventiveServiceReport,
+  getWorkOrderServiceReport,
+} from './services/service-report-service.js';
 import {
   validateFaultFilters,
   validateMachineFilters,
@@ -158,6 +164,15 @@ export function createApp(options = {}) {
     });
   }));
 
+  api.get(
+    '/analytics/maintenance',
+    requireRole('admin'),
+    asyncHandler(async (request, response) => {
+      const analytics = await getMaintenanceAnalytics(request.db);
+      response.json({ analytics });
+    }),
+  );
+
   api.get('/faults', asyncHandler(async (request, response) => {
     const filters = validateFaultFilters(request.query);
     const faults = await listFaultRecords(request.db, filters, request.user);
@@ -259,6 +274,12 @@ export function createApp(options = {}) {
     const workOrderId = parsePositiveId(request.params.id, 'Work order id');
     const workOrder = await getWorkOrderOrThrow(request.db, workOrderId, request.user);
     response.json({ workOrder });
+  }));
+
+  api.get('/work-orders/:id/service-report', asyncHandler(async (request, response) => {
+    const workOrderId = parsePositiveId(request.params.id, 'Work order id');
+    const result = await getWorkOrderServiceReport(request.db, workOrderId, request.user);
+    response.json(result);
   }));
 
   api.get('/work-orders/:id/parts', asyncHandler(async (request, response) => {
@@ -461,6 +482,22 @@ export function createApp(options = {}) {
     response.json({ completions });
   }));
 
+  api.get(
+    '/preventive-plans/:id/completions/:executionId/service-report',
+    requireRole('admin', 'technician'),
+    asyncHandler(async (request, response) => {
+      const planId = parsePositiveId(request.params.id, 'Preventive plan id');
+      const executionId = parsePositiveId(request.params.executionId, 'Preventive completion id');
+      const result = await getPreventiveServiceReport(
+        request.db,
+        planId,
+        executionId,
+        request.user,
+      );
+      response.json(result);
+    }),
+  );
+
   api.post(
     '/preventive-plans/:id/complete',
     requireRole('admin', 'technician'),
@@ -494,6 +531,16 @@ export function createApp(options = {}) {
     const machine = await getMachineOrThrow(request.db, machineId);
     response.json({ machine });
   }));
+
+  api.get(
+    '/machines/:id/maintenance-history',
+    requireRole('admin', 'technician'),
+    asyncHandler(async (request, response) => {
+      const machineId = parseMachineId(request.params.id);
+      const result = await getMachineMaintenanceHistory(request.db, machineId, request.user);
+      response.json(result);
+    }),
+  );
 
   api.post('/machines', requireRole('admin'), asyncHandler(async (request, response) => {
     const machine = await createMachine(request.db, request.body);
