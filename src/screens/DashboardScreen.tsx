@@ -26,6 +26,7 @@ interface DashboardScreenProps {
   user: User;
   onOpenMachine: (machine: Machine) => void;
   onOpenInventory: () => void;
+  onOpenSpareParts: () => void;
   onOpenScanner: () => void;
   onOpenWorkOrders: () => void;
   onOpenPreventive: () => void;
@@ -34,6 +35,7 @@ interface DashboardScreenProps {
 const summaryItems: { key: keyof DashboardSummary; label: string; icon: string; color: string; background: string }[] = [
   { key: 'total', label: 'Toplam makine', icon: '▦', color: colors.primaryDark, background: colors.primarySoft },
   { key: 'running', label: 'Çalışıyor', icon: '✓', color: colors.success, background: colors.successSoft },
+  { key: 'criticalStockParts', label: 'Kritik stoktaki parça', icon: '!', color: colors.danger, background: colors.dangerSoft },
   { key: 'upcomingPreventive', label: 'Yaklaşan periyodik', icon: '↻', color: colors.primaryDark, background: colors.primarySoft },
   { key: 'overduePreventive', label: 'Geciken periyodik', icon: '!', color: colors.danger, background: colors.dangerSoft },
   { key: 'duePreventive', label: 'Bugünkü periyodik', icon: '◷', color: colors.warning, background: colors.warningSoft },
@@ -43,7 +45,7 @@ const summaryItems: { key: keyof DashboardSummary; label: string; icon: string; 
   { key: 'activeWorkOrders', label: 'Aktif iş emirleri', icon: '⚙', color: colors.primaryDark, background: colors.primarySoft },
 ];
 
-export function DashboardScreen({ user, onOpenMachine, onOpenInventory, onOpenScanner, onOpenWorkOrders, onOpenPreventive }: DashboardScreenProps) {
+export function DashboardScreen({ user, onOpenMachine, onOpenInventory, onOpenSpareParts, onOpenScanner, onOpenWorkOrders, onOpenPreventive }: DashboardScreenProps) {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,7 +77,9 @@ export function DashboardScreen({ user, onOpenMachine, onOpenInventory, onOpenSc
 
   const attentionMachines = machines.filter((machine) => machine.status === 'faulted' || machine.status === 'maintenance' || machine.status === 'stopped');
   const visibleSummaryItems = user.role === 'operator'
-    ? summaryItems.filter((item) => !item.key.toString().includes('Preventive'))
+    ? summaryItems.filter((item) => (
+      !item.key.toString().includes('Preventive') && item.key !== 'criticalStockParts'
+    ))
     : summaryItems;
 
   if (loading && !summary) {
@@ -109,6 +113,7 @@ export function DashboardScreen({ user, onOpenMachine, onOpenInventory, onOpenSc
         <Button title="Makine envanteri" onPress={onOpenInventory} variant="secondary" compact style={styles.quickAction} />
         {user.role !== 'operator' ? (
           <>
+            <Button title="Yedek parçalar" onPress={onOpenSpareParts} variant="secondary" compact style={styles.quickAction} />
             <Button title="Bakım planları" onPress={onOpenPreventive} variant="secondary" compact style={styles.quickAction} />
             <Button title="Arıza / iş emirleri" onPress={onOpenWorkOrders} variant="danger" compact style={styles.quickAction} />
           </>
@@ -119,7 +124,7 @@ export function DashboardScreen({ user, onOpenMachine, onOpenInventory, onOpenSc
         <SectionTitle title="Bakım özeti" />
         <View style={styles.summaryGrid}>
           {visibleSummaryItems.map((item) => (
-            <Card key={item.key} style={styles.summaryCard}>
+            <Card key={item.key} style={styles.summaryCard} testID={`dashboard-summary-${item.key}`}>
               <View style={[styles.summaryIcon, { backgroundColor: item.background }]}>
                 <Text style={[styles.summaryIconText, { color: item.color }]}>{item.icon}</Text>
               </View>

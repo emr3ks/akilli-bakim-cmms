@@ -11,7 +11,9 @@ export async function runDemo(databasePath = process.env.CMMS_DB_PATH || DEFAULT
     console.log(
       `Demo data reset: ${result.users} users, ${result.machines} machines, `
       + `${result.faults} faults, ${result.workOrders} work orders, `
-      + `${result.preventivePlans} preventive plans and ${result.checklistItems} checklist items seeded in ${databasePath}`,
+      + `${result.preventivePlans} preventive plans, ${result.checklistItems} checklist items, `
+      + `${result.spareParts} spare parts, ${result.stockUsages} stock usages and `
+      + `${result.stockMovements} stock movements seeded in ${databasePath}`,
     );
     return result;
   } finally {

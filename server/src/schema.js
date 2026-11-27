@@ -9,6 +9,21 @@ CREATE TABLE IF NOT EXISTS users (
   initials TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS spare_parts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL CHECK (category IN ('bearing', 'belt_sprocket', 'sensor_automation', 'hydraulic_pneumatic', 'electrical', 'consumable')),
+  compatible_machine TEXT NOT NULL,
+  unit TEXT NOT NULL CHECK (unit IN ('piece', 'meter', 'liter', 'set')),
+  current_stock REAL NOT NULL DEFAULT 0 CHECK (current_stock >= 0),
+  minimum_stock REAL NOT NULL DEFAULT 0 CHECK (minimum_stock >= 0),
+  location TEXT NOT NULL,
+  unit_cost REAL NOT NULL DEFAULT 0 CHECK (unit_cost >= 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS machines (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   code TEXT NOT NULL UNIQUE,
@@ -149,6 +164,62 @@ CREATE TABLE IF NOT EXISTS maintenance_execution_items (
   UNIQUE (execution_id, checklist_item_id)
 );
 
+CREATE TABLE IF NOT EXISTS stock_usages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  part_id INTEGER NOT NULL,
+  work_order_id INTEGER,
+  preventive_plan_id INTEGER,
+  quantity REAL NOT NULL CHECK (quantity > 0),
+  unit_cost REAL NOT NULL CHECK (unit_cost >= 0),
+  created_by INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  returned_at TEXT,
+  returned_by INTEGER,
+  returned_quantity REAL,
+  CHECK (
+    (work_order_id IS NOT NULL AND preventive_plan_id IS NULL)
+    OR (work_order_id IS NULL AND preventive_plan_id IS NOT NULL)
+  ),
+  FOREIGN KEY (part_id) REFERENCES spare_parts(id) ON DELETE CASCADE,
+  FOREIGN KEY (work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE,
+  FOREIGN KEY (preventive_plan_id) REFERENCES maintenance_plans(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (returned_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS stock_movements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  part_id INTEGER,
+  part_code TEXT NOT NULL,
+  part_name TEXT NOT NULL,
+  movement_type TEXT NOT NULL CHECK (movement_type IN ('in', 'out', 'return')),
+  quantity REAL NOT NULL CHECK (quantity > 0),
+  unit_cost REAL NOT NULL CHECK (unit_cost >= 0),
+  user_id INTEGER NOT NULL,
+  work_order_id INTEGER,
+  preventive_plan_id INTEGER,
+  usage_id INTEGER,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (part_id) REFERENCES spare_parts(id) ON DELETE SET NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_order_id) REFERENCES work_orders(id) ON DELETE SET NULL,
+  FOREIGN KEY (preventive_plan_id) REFERENCES maintenance_plans(id) ON DELETE SET NULL,
+  FOREIGN KEY (usage_id) REFERENCES stock_usages(id) ON DELETE SET NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_usages_active_work_order_part
+  ON stock_usages(part_id, work_order_id) WHERE work_order_id IS NOT NULL AND returned_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_usages_active_preventive_part
+  ON stock_usages(part_id, preventive_plan_id) WHERE preventive_plan_id IS NOT NULL AND returned_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_spare_parts_category ON spare_parts(category);
+CREATE INDEX IF NOT EXISTS idx_stock_usages_part ON stock_usages(part_id);
+CREATE INDEX IF NOT EXISTS idx_stock_usages_work_order ON stock_usages(work_order_id);
+CREATE INDEX IF NOT EXISTS idx_stock_usages_preventive_plan ON stock_usages(preventive_plan_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_part ON stock_movements(part_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_type ON stock_movements(movement_type);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_created_at ON stock_movements(created_at);
 CREATE INDEX IF NOT EXISTS idx_machines_line ON machines(line);
 CREATE INDEX IF NOT EXISTS idx_machines_status ON machines(status);
 CREATE INDEX IF NOT EXISTS idx_machines_criticality ON machines(criticality);

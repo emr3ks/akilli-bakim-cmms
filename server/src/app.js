@@ -38,10 +38,28 @@ import {
   reportPreventiveRuntime,
 } from './services/preventive-plan-service.js';
 import {
+  addStockToSparePart,
+  createSparePart,
+  deleteSparePartById,
+  getCriticalStockCount,
+  getSparePartOrThrow,
+  listCriticalStockAlerts,
+  listSparePartCatalog,
+  listStockMovementHistory,
+  updateSparePartById,
+} from './services/spare-part-service.js';
+import {
+  addContextPart,
+  listContextParts,
+  removeContextPart,
+  updateContextPart,
+} from './services/stock-usage-service.js';
+import {
   validateFaultFilters,
   validateMachineFilters,
   validatePreventivePlanFilters,
   validateRecordPayload,
+  validateSparePartFilters,
   validateWorkOrderFilters,
 } from './validators.js';
 
@@ -134,7 +152,10 @@ export function createApp(options = {}) {
         assignedTo: request.user.role === 'admin' ? null : request.user.id,
       }),
     );
-    response.json(counts);
+    response.json({
+      ...counts,
+      criticalStockParts: await getCriticalStockCount(request.db),
+    });
   }));
 
   api.get('/faults', asyncHandler(async (request, response) => {
@@ -164,6 +185,70 @@ export function createApp(options = {}) {
     response.status(201).json({ fault });
   }));
 
+  api.get('/spare-parts', asyncHandler(async (request, response) => {
+    const filters = validateSparePartFilters(request.query);
+    const parts = await listSparePartCatalog(request.db, filters);
+    response.json({ parts });
+  }));
+
+  api.get('/spare-parts/:id', asyncHandler(async (request, response) => {
+    const partId = parsePositiveId(request.params.id, 'Spare part id');
+    const part = await getSparePartOrThrow(request.db, partId);
+    response.json({ part });
+  }));
+
+  api.post('/spare-parts', requireRole('admin'), asyncHandler(async (request, response) => {
+    const part = await createSparePart(request.db, request.body, request.user);
+    response.status(201).json({ part });
+  }));
+
+  api.put('/spare-parts/:id', requireRole('admin'), asyncHandler(async (request, response) => {
+    const partId = parsePositiveId(request.params.id, 'Spare part id');
+    const part = await updateSparePartById(request.db, partId, request.body, request.user);
+    response.json({ part });
+  }));
+
+  api.delete('/spare-parts/:id', requireRole('admin'), asyncHandler(async (request, response) => {
+    const partId = parsePositiveId(request.params.id, 'Spare part id');
+    const result = await deleteSparePartById(request.db, partId);
+    response.json(result);
+  }));
+
+  api.post(
+    '/spare-parts/:id/stock-movements',
+    requireRole('admin'),
+    asyncHandler(async (request, response) => {
+      const partId = parsePositiveId(request.params.id, 'Spare part id');
+      const result = await addStockToSparePart(
+        request.db,
+        partId,
+        request.body,
+        request.user,
+      );
+      response.status(201).json(result);
+    }),
+  );
+
+  api.get('/stock-alerts', asyncHandler(async (request, response) => {
+    const result = await listCriticalStockAlerts(request.db);
+    response.json(result);
+  }));
+
+  api.get('/stock-movements', asyncHandler(async (request, response) => {
+    const filters = {};
+    if (request.query.partId !== undefined && request.query.partId !== '') {
+      filters.partId = parsePositiveId(request.query.partId, 'Spare part id');
+    }
+    if (request.query.movementType !== undefined && request.query.movementType !== '') {
+      if (!['in', 'out', 'return'].includes(request.query.movementType)) {
+        throw validationError('movementType must be one of: in, out, return');
+      }
+      filters.movementType = request.query.movementType;
+    }
+    const movements = await listStockMovementHistory(request.db, filters);
+    response.json({ movements });
+  }));
+
   api.get('/work-orders', asyncHandler(async (request, response) => {
     const filters = validateWorkOrderFilters(request.query);
     const workOrders = await listManagedWorkOrders(request.db, filters, request.user);
@@ -175,6 +260,68 @@ export function createApp(options = {}) {
     const workOrder = await getWorkOrderOrThrow(request.db, workOrderId, request.user);
     response.json({ workOrder });
   }));
+
+  api.get('/work-orders/:id/parts', asyncHandler(async (request, response) => {
+    const workOrderId = parsePositiveId(request.params.id, 'Work order id');
+    const result = await listContextParts(
+      request.db,
+      'work_order',
+      workOrderId,
+      request.user,
+    );
+    response.json(result);
+  }));
+
+  api.post(
+    '/work-orders/:id/parts',
+    requireRole('admin', 'technician'),
+    asyncHandler(async (request, response) => {
+      const workOrderId = parsePositiveId(request.params.id, 'Work order id');
+      const result = await addContextPart(
+        request.db,
+        'work_order',
+        workOrderId,
+        request.body,
+        request.user,
+      );
+      response.status(201).json(result);
+    }),
+  );
+
+  api.put(
+    '/work-orders/:id/parts/:usageId',
+    requireRole('admin', 'technician'),
+    asyncHandler(async (request, response) => {
+      const workOrderId = parsePositiveId(request.params.id, 'Work order id');
+      const usageId = parsePositiveId(request.params.usageId, 'Stock usage id');
+      const result = await updateContextPart(
+        request.db,
+        'work_order',
+        workOrderId,
+        usageId,
+        request.body,
+        request.user,
+      );
+      response.json(result);
+    }),
+  );
+
+  api.delete(
+    '/work-orders/:id/parts/:usageId',
+    requireRole('admin', 'technician'),
+    asyncHandler(async (request, response) => {
+      const workOrderId = parsePositiveId(request.params.id, 'Work order id');
+      const usageId = parsePositiveId(request.params.usageId, 'Stock usage id');
+      const result = await removeContextPart(
+        request.db,
+        'work_order',
+        workOrderId,
+        usageId,
+        request.user,
+      );
+      response.json(result);
+    }),
+  );
 
   api.post('/work-orders', requireRole('admin'), asyncHandler(async (request, response) => {
     const workOrder = await createWorkOrder(request.db, request.body, request.user);
@@ -219,6 +366,68 @@ export function createApp(options = {}) {
     const plans = await listManagedPreventivePlans(request.db, filters, request.user);
     response.json({ plans });
   }));
+
+  api.get('/preventive-plans/:id/parts', asyncHandler(async (request, response) => {
+    const planId = parsePositiveId(request.params.id, 'Preventive plan id');
+    const result = await listContextParts(
+      request.db,
+      'preventive_plan',
+      planId,
+      request.user,
+    );
+    response.json(result);
+  }));
+
+  api.post(
+    '/preventive-plans/:id/parts',
+    requireRole('admin', 'technician'),
+    asyncHandler(async (request, response) => {
+      const planId = parsePositiveId(request.params.id, 'Preventive plan id');
+      const result = await addContextPart(
+        request.db,
+        'preventive_plan',
+        planId,
+        request.body,
+        request.user,
+      );
+      response.status(201).json(result);
+    }),
+  );
+
+  api.put(
+    '/preventive-plans/:id/parts/:usageId',
+    requireRole('admin', 'technician'),
+    asyncHandler(async (request, response) => {
+      const planId = parsePositiveId(request.params.id, 'Preventive plan id');
+      const usageId = parsePositiveId(request.params.usageId, 'Stock usage id');
+      const result = await updateContextPart(
+        request.db,
+        'preventive_plan',
+        planId,
+        usageId,
+        request.body,
+        request.user,
+      );
+      response.json(result);
+    }),
+  );
+
+  api.delete(
+    '/preventive-plans/:id/parts/:usageId',
+    requireRole('admin', 'technician'),
+    asyncHandler(async (request, response) => {
+      const planId = parsePositiveId(request.params.id, 'Preventive plan id');
+      const usageId = parsePositiveId(request.params.usageId, 'Stock usage id');
+      const result = await removeContextPart(
+        request.db,
+        'preventive_plan',
+        planId,
+        usageId,
+        request.user,
+      );
+      response.json(result);
+    }),
+  );
 
   api.get('/preventive-plans/:id', asyncHandler(async (request, response) => {
     const planId = parsePositiveId(request.params.id, 'Preventive plan id');

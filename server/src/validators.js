@@ -35,6 +35,46 @@ export const PREVENTIVE_FREQUENCIES = [
   'annual',
   'working_hours',
 ];
+export const SPARE_PART_CATEGORIES = [
+  'bearing',
+  'belt_sprocket',
+  'sensor_automation',
+  'hydraulic_pneumatic',
+  'electrical',
+  'consumable',
+];
+export const SPARE_PART_UNITS = ['piece', 'meter', 'liter', 'set'];
+export const SPARE_PART_STATUSES = ['sufficient', 'critical', 'depleted'];
+export const STOCK_MOVEMENT_TYPES = ['in', 'out', 'return'];
+export const SPARE_PART_CODE_PATTERN = /^YDK-\d{4}-\d{3}$/;
+
+const SPARE_PART_CATEGORY_ALIASES = {
+  bearing: 'bearing',
+  rulman: 'bearing',
+  'belt_sprocket': 'belt_sprocket',
+  'belt/sprocket': 'belt_sprocket',
+  'kayış/kasnak': 'belt_sprocket',
+  'sensor_automation': 'sensor_automation',
+  'sensor/automation': 'sensor_automation',
+  'sensör/otomasyon': 'sensor_automation',
+  'hydraulic_pneumatic': 'hydraulic_pneumatic',
+  'hydraulic/pneumatic': 'hydraulic_pneumatic',
+  'hidrolik/pnömatik': 'hydraulic_pneumatic',
+  electrical: 'electrical',
+  elektrik: 'electrical',
+  consumable: 'consumable',
+  'sarf malzeme': 'consumable',
+};
+
+const SPARE_PART_UNIT_ALIASES = {
+  piece: 'piece',
+  adet: 'piece',
+  meter: 'meter',
+  metre: 'meter',
+  liter: 'liter',
+  litre: 'liter',
+  set: 'set',
+};
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -43,6 +83,13 @@ function isNonEmptyString(value) {
 function requiredString(payload, field) {
   if (!isNonEmptyString(payload[field])) {
     throw validationError(`Machine ${field} is required and must be a non-empty string`);
+  }
+  return payload[field].trim();
+}
+
+function sparePartRequiredString(payload, field) {
+  if (!isNonEmptyString(payload[field])) {
+    throw validationError(`Spare-part ${field} is required and must be a non-empty string`);
   }
   return payload[field].trim();
 }
@@ -570,5 +617,164 @@ export function validatePreventiveCompletionPayload(payload) {
     );
   }
 
+  return data;
+}
+
+function nonNegativeNumber(value, label, { defaultValue = null } = {}) {
+  if (value === undefined || value === null || value === '') {
+    if (defaultValue !== null) return defaultValue;
+    throw validationError(`${label} is required`);
+  }
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw validationError(`${label} must be a number greater than or equal to 0`);
+  }
+  return parsed;
+}
+
+function positiveNumber(value, label) {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw validationError(`${label} must be a number greater than 0`);
+  }
+  return parsed;
+}
+
+export function validateSparePartPayload(payload, { partial = false } = {}) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw validationError('Spare-part request body must be a JSON object');
+  }
+
+  const data = {};
+  const has = (field) => Object.prototype.hasOwnProperty.call(payload, field);
+  const required = (field) => !partial || has(field);
+
+  if (required('code')) {
+    if (!isNonEmptyString(payload.code)) {
+      throw validationError('Spare-part code must be a non-empty string');
+    }
+    const code = payload.code.trim();
+    if (!SPARE_PART_CODE_PATTERN.test(code)) {
+      throw validationError('Spare-part code must match YDK-YYYY-NNN (for example, YDK-2026-001)');
+    }
+    data.code = code;
+  }
+
+  if (required('name')) data.name = sparePartRequiredString(payload, 'name');
+  if (required('compatibleMachine') || has('compatibility')) {
+    const compatibility = payload.compatibleMachine ?? payload.compatibility;
+    data.compatibleMachine = sparePartRequiredString({ compatibleMachine: compatibility }, 'compatibleMachine');
+  }
+  if (required('location')) data.location = sparePartRequiredString(payload, 'location');
+
+  if (required('category')) {
+    const category = typeof payload.category === 'string'
+      ? SPARE_PART_CATEGORY_ALIASES[payload.category.trim().toLocaleLowerCase('tr-TR')]
+      : undefined;
+    if (!category || !SPARE_PART_CATEGORIES.includes(category)) {
+      throw validationError(`Spare-part category must be one of: ${SPARE_PART_CATEGORIES.join(', ')}`);
+    }
+    data.category = category;
+  }
+
+  if (required('unit')) {
+    const unit = typeof payload.unit === 'string'
+      ? SPARE_PART_UNIT_ALIASES[payload.unit.trim().toLocaleLowerCase('tr-TR')]
+      : undefined;
+    if (!unit || !SPARE_PART_UNITS.includes(unit)) {
+      throw validationError(`Spare-part unit must be one of: ${SPARE_PART_UNITS.join(', ')}`);
+    }
+    data.unit = unit;
+  }
+
+  if (required('currentStock')) {
+    data.currentStock = nonNegativeNumber(payload.currentStock, 'Spare-part currentStock');
+  } else if (!partial) {
+    data.currentStock = 0;
+  }
+
+  if (required('minimumStock')) {
+    data.minimumStock = nonNegativeNumber(payload.minimumStock, 'Spare-part minimumStock');
+  }
+
+  if (required('unitCost')) {
+    data.unitCost = nonNegativeNumber(payload.unitCost, 'Spare-part unitCost');
+  } else if (!partial) {
+    data.unitCost = 0;
+  }
+
+  if (partial && !Object.keys(data).length) {
+    throw validationError('At least one spare-part field must be supplied');
+  }
+  return data;
+}
+
+export function validateSparePartFilters(query = {}) {
+  const filters = {};
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string') throw validationError('q must be a string');
+    filters.q = query.q.trim();
+  }
+  if (query.code !== undefined) {
+    if (typeof query.code !== 'string') throw validationError('code must be a string');
+    filters.code = query.code.trim();
+  }
+  if (query.name !== undefined) {
+    if (typeof query.name !== 'string') throw validationError('name must be a string');
+    filters.name = query.name.trim();
+  }
+  if (query.category !== undefined && query.category !== '') {
+    const category = typeof query.category === 'string'
+      ? SPARE_PART_CATEGORY_ALIASES[query.category.trim().toLocaleLowerCase('tr-TR')]
+      : undefined;
+    if (!category || !SPARE_PART_CATEGORIES.includes(category)) {
+      throw validationError(`category must be one of: ${SPARE_PART_CATEGORIES.join(', ')}`);
+    }
+    filters.category = category;
+  }
+  if (query.status !== undefined && query.status !== '') {
+    if (!SPARE_PART_STATUSES.includes(query.status)) {
+      throw validationError(`status must be one of: ${SPARE_PART_STATUSES.join(', ')}`);
+    }
+    filters.status = query.status;
+  }
+  return filters;
+}
+
+export function validateStockUsagePayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw validationError('Stock-usage request body must be a JSON object');
+  }
+  return {
+    partId: positiveInteger(payload.partId, 'Stock usage partId'),
+    quantity: positiveNumber(payload.quantity, 'Stock usage quantity'),
+  };
+}
+
+export function validateStockQuantityPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw validationError('Stock-quantity request body must be a JSON object');
+  }
+  return {
+    quantity: positiveNumber(payload.quantity, 'Stock quantity'),
+  };
+}
+
+export function validateStockMovementPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw validationError('Stock-movement request body must be a JSON object');
+  }
+  const data = {
+    quantity: positiveNumber(payload.quantity, 'Stock movement quantity'),
+  };
+  if (payload.note !== undefined && payload.note !== null) {
+    if (!isNonEmptyString(payload.note)) {
+      throw validationError('Stock movement note must be a non-empty string');
+    }
+    data.note = payload.note.trim();
+    if (data.note.length > 500) {
+      throw validationError('Stock movement note must be 500 characters or fewer');
+    }
+  }
   return data;
 }

@@ -12,7 +12,14 @@ import type {
   PreventivePlan,
   PreventivePlanFilters,
   PreventivePlanInput,
+  PartUsage,
   RecordType,
+  SparePart,
+  SparePartFilters,
+  SparePartInput,
+  StockAlert,
+  StockEntryInput,
+  StockMovement,
   User,
   WorkOrder,
   WorkOrderCompletionInput,
@@ -115,6 +122,203 @@ function toPreventivePlanQuery(filters: PreventivePlanFilters): string {
   return query ? `?${query}` : '';
 }
 
+function toSparePartQuery(filters: SparePartFilters): string {
+  const params = new URLSearchParams();
+  if (filters.q?.trim()) params.set('q', filters.q.trim());
+  if (filters.code?.trim()) params.set('code', filters.code.trim());
+  if (filters.name?.trim()) params.set('name', filters.name.trim());
+  if (filters.category) params.set('category', filters.category);
+  if (filters.status) params.set('status', filters.status);
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+type RawPart = Partial<SparePart> & {
+  stockStatus?: SparePart['status'];
+  compatibility?: string;
+};
+
+function normalizePart(raw: RawPart): SparePart {
+  const currentStock = Number(raw.currentStock ?? 0);
+  const minimumStock = Number(raw.minimumStock ?? 0);
+  const candidateStatus = raw.status ?? raw.stockStatus;
+  const status: SparePart['status'] = candidateStatus === 'sufficient'
+    || candidateStatus === 'critical'
+    || candidateStatus === 'depleted'
+    ? candidateStatus
+    : currentStock <= 0
+      ? 'depleted'
+      : currentStock <= minimumStock
+        ? 'critical'
+        : 'sufficient';
+  return {
+    id: raw.id ?? 0,
+    code: raw.code ?? '',
+    name: raw.name ?? '',
+    category: raw.category ?? 'consumable',
+    compatibleMachine: raw.compatibleMachine ?? raw.compatibility ?? '',
+    unit: raw.unit ?? 'piece',
+    currentStock,
+    minimumStock,
+    location: raw.location ?? '',
+    unitCost: Number(raw.unitCost ?? 0),
+    status,
+    createdAt: raw.createdAt ?? '',
+    updatedAt: raw.updatedAt ?? raw.createdAt ?? '',
+  };
+}
+
+type RawUsage = Partial<Omit<PartUsage, 'part'>> & {
+  part?: RawPart;
+  partCode?: string;
+  partName?: string;
+  unit?: SparePart['unit'];
+  category?: SparePart['category'];
+  compatibility?: string;
+  compatibleMachine?: string;
+  currentStock?: number;
+  minimumStock?: number;
+  location?: string;
+  status?: SparePart['status'];
+  stockStatus?: SparePart['status'];
+  updatedAt?: string;
+};
+
+function normalizeUsage(raw: RawUsage): PartUsage {
+  const unitCost = Number(raw.unitCost ?? 0);
+  const quantity = Number(raw.quantity ?? 0);
+  const part = raw.part
+    ? normalizePart(raw.part)
+    : normalizePart({
+        id: raw.partId,
+        code: raw.partCode,
+        name: raw.partName,
+        category: raw.category,
+        compatibleMachine: raw.compatibleMachine ?? raw.compatibility,
+        unit: raw.unit,
+        currentStock: raw.currentStock,
+        minimumStock: raw.minimumStock,
+        location: raw.location,
+        unitCost,
+        status: raw.status ?? raw.stockStatus,
+        createdAt: raw.createdAt,
+        updatedAt: raw.updatedAt,
+      });
+  return {
+    id: raw.id ?? 0,
+    partId: raw.partId ?? part.id,
+    part,
+    quantity,
+    unitCost,
+    totalCost: Number(raw.totalCost ?? quantity * unitCost),
+    createdBy: raw.createdBy ?? 0,
+    createdAt: raw.createdAt ?? '',
+  };
+}
+
+type RawAlert = {
+  id?: number;
+  code?: string;
+  name?: string;
+  category?: SparePart['category'];
+  currentStock?: number;
+  minimumStock?: number;
+  status?: SparePart['status'];
+  stockStatus?: SparePart['status'];
+  shortage?: number;
+  unit?: SparePart['unit'];
+  location?: string;
+  part?: RawPart;
+};
+
+function normalizeAlert(raw: RawAlert): StockAlert {
+  const part = raw.part ? normalizePart(raw.part) : null;
+  const currentStock = Number(raw.currentStock ?? part?.currentStock ?? 0);
+  const minimumStock = Number(raw.minimumStock ?? part?.minimumStock ?? 0);
+  const status = raw.status ?? raw.stockStatus ?? part?.status
+    ?? (currentStock <= 0 ? 'depleted' : currentStock <= minimumStock ? 'critical' : 'sufficient');
+  return {
+    id: raw.id ?? part?.id ?? 0,
+    code: raw.code ?? part?.code ?? '',
+    name: raw.name ?? part?.name ?? '',
+    category: raw.category ?? part?.category ?? 'consumable',
+    currentStock,
+    minimumStock,
+    status,
+    shortage: Number(raw.shortage ?? Math.max(minimumStock - currentStock, 0)),
+    unit: raw.unit ?? part?.unit ?? 'piece',
+    location: raw.location ?? part?.location ?? '',
+  };
+}
+
+type RawMovement = Partial<Omit<StockMovement, 'user'>> & {
+  user?: StockMovement['user'];
+  userId?: number;
+};
+
+function normalizeMovement(raw: RawMovement): StockMovement {
+  const unitCost = Number(raw.unitCost ?? 0);
+  const quantity = Number(raw.quantity ?? 0);
+  return {
+    id: raw.id ?? 0,
+    partId: raw.partId ?? null,
+    partCode: raw.partCode ?? '',
+    partName: raw.partName ?? '',
+    movementType: raw.movementType ?? 'in',
+    quantity,
+    unitCost,
+    totalCost: Number(raw.totalCost ?? quantity * unitCost),
+    user: raw.user ?? {
+      id: raw.userId ?? 0,
+      name: 'Bilinmeyen kullanıcı',
+      initials: '?',
+    },
+    workOrderId: raw.workOrderId ?? null,
+    preventivePlanId: raw.preventivePlanId ?? null,
+    usageId: raw.usageId ?? null,
+    note: raw.note ?? null,
+    createdAt: raw.createdAt ?? '',
+  };
+}
+
+type RawUsageResponse = {
+  usage?: RawUsage;
+  parts?: RawUsage[];
+  totalCost?: number;
+  partsCost?: number;
+};
+
+async function getUsageParts(userId: number, path: string) {
+  const response = await request<RawUsageResponse>(path, { userId });
+  const parts = (response.parts ?? []).map(normalizeUsage);
+  return {
+    parts,
+    totalCost: Number(response.totalCost ?? response.partsCost ?? parts.reduce((sum, part) => sum + part.totalCost, 0)),
+  };
+}
+
+async function saveUsage(
+  userId: number,
+  path: string,
+  method: 'POST' | 'PUT',
+  body: { partId: number; quantity: number },
+) {
+  const response = await request<RawUsageResponse>(path, { method, body, userId });
+  const parts = (response.parts ?? []).map(normalizeUsage);
+  const usage = response.usage ? normalizeUsage(response.usage) : null;
+  return {
+    usage,
+    parts,
+    totalCost: Number(
+      response.totalCost
+      ?? response.partsCost
+      ?? usage?.totalCost
+      ?? parts.reduce((sum, part) => sum + part.totalCost, 0)
+      ?? 0,
+    ),
+  };
+}
+
 export const api = {
   getDemoUsers: () => request<{ users: User[] }>('/auth/demo-users'),
   login: (userId: number) => request<{ user: User }>('/auth/login', { method: 'POST', body: { userId } }),
@@ -192,6 +396,100 @@ export const api = {
     request<{ workOrder: WorkOrder }>(`/work-orders/${id}/status`, {
       method: 'PATCH',
       body: { status, ...(completion ?? {}) },
+      userId,
+    }),
+  getSpareParts: async (userId: number, filters: SparePartFilters = {}) => {
+    const response = await request<{ parts?: RawPart[]; spareParts?: RawPart[] }>(
+      `/spare-parts${toSparePartQuery(filters)}`,
+      { userId },
+    );
+    return { parts: (response.parts ?? response.spareParts ?? []).map(normalizePart) };
+  },
+  getSparePart: async (userId: number, id: number) => {
+    const response = await request<{ part?: RawPart; sparePart?: RawPart }>(`/spare-parts/${id}`, { userId });
+    return { part: normalizePart(response.part ?? response.sparePart ?? {}) };
+  },
+  createSparePart: async (userId: number, part: SparePartInput) => {
+    const response = await request<{ part?: RawPart; sparePart?: RawPart }>('/spare-parts', {
+      method: 'POST',
+      body: part,
+      userId,
+    });
+    return { part: normalizePart(response.part ?? response.sparePart ?? {}) };
+  },
+  updateSparePart: async (userId: number, id: number, part: Partial<SparePartInput>) => {
+    const response = await request<{ part?: RawPart; sparePart?: RawPart }>(`/spare-parts/${id}`, {
+      method: 'PUT',
+      body: part,
+      userId,
+    });
+    return { part: normalizePart(response.part ?? response.sparePart ?? {}) };
+  },
+  deleteSparePart: (userId: number, id: number) =>
+    request<{ deleted: boolean; id: number }>(`/spare-parts/${id}`, { method: 'DELETE', userId }),
+  createStockMovement: async (userId: number, partId: number, body: StockEntryInput) => {
+    type StockResponse = {
+      part?: RawPart;
+      sparePart?: RawPart;
+      movement?: RawMovement;
+    };
+    let response: StockResponse;
+    try {
+      response = await request<StockResponse>(`/spare-parts/${partId}/stock-movements`, {
+        method: 'POST',
+        body,
+        userId,
+      });
+    } catch (reason) {
+      if (!(reason instanceof ApiError) || reason.status !== 404) throw reason;
+      response = await request<StockResponse>(`/spare-parts/${partId}/stock`, {
+        method: 'POST',
+        body,
+        userId,
+      });
+    }
+    return {
+      part: normalizePart(response.part ?? response.sparePart ?? {}),
+      movement: normalizeMovement(response.movement ?? {}),
+    };
+  },
+  getStockAlerts: async (userId: number) => {
+    const response = await request<{ alerts?: RawAlert[]; count?: number }>('/stock-alerts', { userId });
+    const alerts = (response.alerts ?? []).map(normalizeAlert);
+    return { alerts, count: Number(response.count ?? alerts.length) };
+  },
+  getStockMovements: async (userId: number) => {
+    const response = await request<{ movements?: RawMovement[] }>('/stock-movements', { userId });
+    return { movements: (response.movements ?? []).map(normalizeMovement) };
+  },
+  getWorkOrderParts: (userId: number, id: number) =>
+    getUsageParts(userId, `/work-orders/${id}/parts`),
+  addWorkOrderPart: (userId: number, id: number, body: { partId: number; quantity: number }) =>
+    saveUsage(userId, `/work-orders/${id}/parts`, 'POST', body),
+  updateWorkOrderPart: (
+    userId: number,
+    id: number,
+    usageId: number,
+    body: { partId: number; quantity: number },
+  ) => saveUsage(userId, `/work-orders/${id}/parts/${usageId}`, 'PUT', body),
+  removeWorkOrderPart: (userId: number, id: number, usageId: number) =>
+    request<{ deleted: boolean; id: number; totalCost?: number }>(`/work-orders/${id}/parts/${usageId}`, {
+      method: 'DELETE',
+      userId,
+    }),
+  getPreventivePlanParts: (userId: number, id: number) =>
+    getUsageParts(userId, `/preventive-plans/${id}/parts`),
+  addPreventivePlanPart: (userId: number, id: number, body: { partId: number; quantity: number }) =>
+    saveUsage(userId, `/preventive-plans/${id}/parts`, 'POST', body),
+  updatePreventivePlanPart: (
+    userId: number,
+    id: number,
+    usageId: number,
+    body: { partId: number; quantity: number },
+  ) => saveUsage(userId, `/preventive-plans/${id}/parts/${usageId}`, 'PUT', body),
+  removePreventivePlanPart: (userId: number, id: number, usageId: number) =>
+    request<{ deleted: boolean; id: number; totalCost?: number }>(`/preventive-plans/${id}/parts/${usageId}`, {
+      method: 'DELETE',
       userId,
     }),
   getPreventivePlans: (userId: number, filters: PreventivePlanFilters = {}) =>

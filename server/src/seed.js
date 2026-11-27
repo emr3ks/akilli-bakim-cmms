@@ -25,6 +25,165 @@ export const DEMO_USERS = [
   },
 ];
 
+export const DEMO_SPARE_PARTS = [
+  {
+    code: 'YDK-2026-001',
+    name: 'Rulman 6205-2RS',
+    category: 'bearing',
+    compatibleMachine: 'Haas VF-4SS / CNC Freze Merkezi',
+    unit: 'piece',
+    currentStock: 12,
+    initialStock: 14,
+    minimumStock: 4,
+    location: 'A-01-03',
+    unitCost: 480.75,
+  },
+  {
+    code: 'YDK-2026-002',
+    name: 'Trapez Kayış 8M-1600',
+    category: 'belt_sprocket',
+    compatibleMachine: 'Interroll MultiControl AI',
+    unit: 'meter',
+    currentStock: 6,
+    initialStock: 6,
+    minimumStock: 2,
+    location: 'A-02-01',
+    unitCost: 785.4,
+  },
+  {
+    code: 'YDK-2026-003',
+    name: 'Endüktif Yaklaşım Sensörü M12',
+    category: 'sensor_automation',
+    compatibleMachine: 'Krones Contiform 3',
+    unit: 'piece',
+    currentStock: 2,
+    initialStock: 2,
+    minimumStock: 4,
+    location: 'B-04-06',
+    unitCost: 1250,
+  },
+  {
+    code: 'YDK-2026-004',
+    name: 'Hidrolik Yağ Filtresi HP-400',
+    category: 'hydraulic_pneumatic',
+    compatibleMachine: 'Schuler HP-400',
+    unit: 'piece',
+    currentStock: 0,
+    initialStock: 0,
+    minimumStock: 3,
+    location: 'C-01-02',
+    unitCost: 1890,
+  },
+  {
+    code: 'YDK-2026-005',
+    name: '24V AC Kontaktör 9A',
+    category: 'electrical',
+    compatibleMachine: 'FANUC ARC Mate 120iD',
+    unit: 'piece',
+    currentStock: 8,
+    initialStock: 10,
+    minimumStock: 3,
+    location: 'B-02-08',
+    unitCost: 640.25,
+  },
+  {
+    code: 'YDK-2026-006',
+    name: 'Pnömatik Silindir 63×100',
+    category: 'hydraulic_pneumatic',
+    compatibleMachine: 'Atlas Copco GA-90 VSD',
+    unit: 'piece',
+    currentStock: 4,
+    initialStock: 5,
+    minimumStock: 2,
+    location: 'C-03-05',
+    unitCost: 2150,
+  },
+  {
+    code: 'YDK-2026-007',
+    name: 'CNC Kesim Yağı ISO VG 46',
+    category: 'consumable',
+    compatibleMachine: 'Haas VF-4SS / CNC Freze Merkezi',
+    unit: 'liter',
+    currentStock: 18,
+    initialStock: 20,
+    minimumStock: 5,
+    location: 'D-01-01',
+    unitCost: 315.8,
+  },
+  {
+    code: 'YDK-2026-008',
+    name: 'Hidrolik Pres conta seti',
+    category: 'hydraulic_pneumatic',
+    compatibleMachine: 'Schuler HP-400',
+    unit: 'set',
+    currentStock: 5,
+    initialStock: 5,
+    minimumStock: 2,
+    location: 'C-01-06',
+    unitCost: 3400,
+  },
+];
+
+export const DEMO_STOCK_USAGES = [
+  {
+    key: 'work-order-cylinder',
+    partCode: 'YDK-2026-006',
+    contextType: 'work_order',
+    contextCode: 'IE-2026-002',
+    quantity: 1,
+    createdBy: 2,
+    createdAt: '2026-11-25T14:00:00.000Z',
+  },
+  {
+    key: 'work-order-bearing',
+    partCode: 'YDK-2026-001',
+    contextType: 'work_order',
+    contextCode: 'IE-2026-003',
+    quantity: 2,
+    createdBy: 2,
+    createdAt: '2026-11-24T10:05:00.000Z',
+  },
+  {
+    key: 'preventive-contactor',
+    partCode: 'YDK-2026-005',
+    contextType: 'preventive_plan',
+    contextCode: 'PB-2026-001',
+    quantity: 2,
+    createdBy: 2,
+    createdAt: '2026-11-23T08:15:00.000Z',
+  },
+  {
+    key: 'preventive-cutting-oil',
+    partCode: 'YDK-2026-007',
+    contextType: 'preventive_plan',
+    contextCode: 'PB-2026-003',
+    quantity: 2,
+    createdBy: 2,
+    createdAt: '2026-11-22T09:30:00.000Z',
+  },
+];
+
+export const DEMO_STOCK_MOVEMENTS = [
+  {
+    partCode: 'YDK-2026-005',
+    movementType: 'out',
+    quantity: 1,
+    workOrderCode: 'IE-2026-005',
+    userId: 2,
+    note: 'IE-2026-005 iş emri parça kullanımı',
+    createdAt: '2026-11-20T08:20:00.000Z',
+  },
+  {
+    partCode: 'YDK-2026-005',
+    movementType: 'return',
+    quantity: 1,
+    workOrderCode: 'IE-2026-005',
+    userId: 2,
+    note: 'IE-2026-005 iş emri parça iadesi',
+    createdAt: '2026-11-20T09:10:00.000Z',
+  },
+];
+
 export const DEMO_MACHINES = [
   {
     code: 'MCH-2026-001',
@@ -303,6 +462,9 @@ export const DEMO_PREVENTIVE_PLANS = [
 ];
 
 export async function resetDatabase(database) {
+  await run(database, 'DELETE FROM stock_movements');
+  await run(database, 'DELETE FROM stock_usages');
+  await run(database, 'DELETE FROM spare_parts');
   await run(database, 'DELETE FROM maintenance_execution_items');
   await run(database, 'DELETE FROM maintenance_occurrence_keys');
   await run(database, 'DELETE FROM maintenance_executions');
@@ -316,7 +478,7 @@ export async function resetDatabase(database) {
   await run(database, 'DELETE FROM users');
   await run(
     database,
-    "DELETE FROM sqlite_sequence WHERE name IN ('maintenance_execution_items', 'maintenance_executions', 'maintenance_checklist_items', 'maintenance_plans', 'work_orders', 'faults', 'maintenance_records', 'machines', 'users')",
+    "DELETE FROM sqlite_sequence WHERE name IN ('stock_movements', 'stock_usages', 'spare_parts', 'maintenance_execution_items', 'maintenance_executions', 'maintenance_checklist_items', 'maintenance_plans', 'work_orders', 'faults', 'maintenance_records', 'machines', 'users')",
   );
 }
 
@@ -331,6 +493,31 @@ export async function seedDemoData(database) {
         'INSERT INTO users (id, name, email, role, initials) VALUES (?, ?, ?, ?, ?)',
         [user.id, user.name, user.email, user.role, user.initials],
       );
+    }
+
+    const sparePartIds = new Map();
+    for (const part of DEMO_SPARE_PARTS) {
+      const result = await run(
+        database,
+        `INSERT INTO spare_parts
+          (code, name, category, compatible_machine, unit, current_stock,
+           minimum_stock, location, unit_cost, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          part.code,
+          part.name,
+          part.category,
+          part.compatibleMachine,
+          part.unit,
+          part.currentStock,
+          part.minimumStock,
+          part.location,
+          part.unitCost,
+          '2026-11-01T08:00:00.000Z',
+          '2026-11-01T08:00:00.000Z',
+        ],
+      );
+      sparePartIds.set(part.code, result.lastID);
     }
 
     const timestamp = new Date().toISOString();
@@ -382,8 +569,9 @@ export async function seedDemoData(database) {
       faultIds.set(fault.code, result.lastID);
     }
 
+    const workOrderIds = new Map();
     for (const workOrder of DEMO_WORK_ORDERS) {
-      await run(
+      const result = await run(
         database,
         `INSERT INTO work_orders
           (code, fault_id, assigned_to, status, intervention_note, root_cause, duration_minutes,
@@ -406,9 +594,11 @@ export async function seedDemoData(database) {
           workOrder.createdAt,
         ],
       );
+      workOrderIds.set(workOrder.code, result.lastID);
     }
 
     const demoToday = todayPlantDate();
+    const preventivePlanIds = new Map();
     for (const plan of DEMO_PREVENTIVE_PLANS) {
       const nextDueDate = addUtcDays(demoToday, plan.dueOffsetDays);
       const result = await run(
@@ -434,6 +624,7 @@ export async function seedDemoData(database) {
           timestamp,
         ],
       );
+      preventivePlanIds.set(plan.code, result.lastID);
 
       for (const [index, item] of plan.checklist.entries()) {
         await run(
@@ -454,6 +645,102 @@ export async function seedDemoData(database) {
         );
       }
     }
+
+    const sparePartByCode = new Map(
+      DEMO_SPARE_PARTS.map((part) => [part.code, part]),
+    );
+    const stockUsageIds = new Map();
+    for (const usage of DEMO_STOCK_USAGES) {
+      const part = sparePartByCode.get(usage.partCode);
+      const result = await run(
+        database,
+        `INSERT INTO stock_usages
+          (part_id, work_order_id, preventive_plan_id, quantity, unit_cost,
+           created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          sparePartIds.get(usage.partCode),
+          usage.contextType === 'work_order' ? workOrderIds.get(usage.contextCode) : null,
+          usage.contextType === 'preventive_plan'
+            ? preventivePlanIds.get(usage.contextCode)
+            : null,
+          usage.quantity,
+          part.unitCost,
+          usage.createdBy,
+          usage.createdAt,
+        ],
+      );
+      stockUsageIds.set(usage.key, result.lastID);
+    }
+
+    for (const part of DEMO_SPARE_PARTS) {
+      if (part.initialStock <= 0) continue;
+      await run(
+        database,
+        `INSERT INTO stock_movements
+          (part_id, part_code, part_name, movement_type, quantity, unit_cost,
+           user_id, work_order_id, preventive_plan_id, usage_id, note, created_at)
+         VALUES (?, ?, ?, 'in', ?, ?, 1, NULL, NULL, NULL, ?, ?)`,
+        [
+          sparePartIds.get(part.code),
+          part.code,
+          part.name,
+          part.initialStock,
+          part.unitCost,
+          'Demo stoğu / satın alma girişi',
+          '2026-11-01T08:05:00.000Z',
+        ],
+      );
+    }
+
+    for (const usage of DEMO_STOCK_USAGES) {
+      const part = sparePartByCode.get(usage.partCode);
+      await run(
+        database,
+        `INSERT INTO stock_movements
+          (part_id, part_code, part_name, movement_type, quantity, unit_cost,
+           user_id, work_order_id, preventive_plan_id, usage_id, note, created_at)
+         VALUES (?, ?, ?, 'out', ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          sparePartIds.get(usage.partCode),
+          part.code,
+          part.name,
+          usage.quantity,
+          part.unitCost,
+          usage.createdBy,
+          usage.contextType === 'work_order' ? workOrderIds.get(usage.contextCode) : null,
+          usage.contextType === 'preventive_plan'
+            ? preventivePlanIds.get(usage.contextCode)
+            : null,
+          stockUsageIds.get(usage.key),
+          `${usage.contextCode} parça kullanımı`,
+          usage.createdAt,
+        ],
+      );
+    }
+
+    for (const movement of DEMO_STOCK_MOVEMENTS) {
+      const part = sparePartByCode.get(movement.partCode);
+      await run(
+        database,
+        `INSERT INTO stock_movements
+          (part_id, part_code, part_name, movement_type, quantity, unit_cost,
+           user_id, work_order_id, preventive_plan_id, usage_id, note, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`,
+        [
+          sparePartIds.get(movement.partCode),
+          part.code,
+          part.name,
+          movement.movementType,
+          movement.quantity,
+          part.unitCost,
+          movement.userId,
+          workOrderIds.get(movement.workOrderCode),
+          movement.note,
+          movement.createdAt,
+        ],
+      );
+    }
   });
 
   return {
@@ -462,6 +749,11 @@ export async function seedDemoData(database) {
     faults: DEMO_FAULTS.length,
     workOrders: DEMO_WORK_ORDERS.length,
     preventivePlans: DEMO_PREVENTIVE_PLANS.length,
+    spareParts: DEMO_SPARE_PARTS.length,
+    stockUsages: DEMO_STOCK_USAGES.length,
+    stockMovements: DEMO_SPARE_PARTS.filter((part) => part.initialStock > 0).length
+      + DEMO_STOCK_USAGES.length
+      + DEMO_STOCK_MOVEMENTS.length,
     checklistItems: DEMO_PREVENTIVE_PLANS.reduce(
       (total, plan) => total + plan.checklist.length,
       0,

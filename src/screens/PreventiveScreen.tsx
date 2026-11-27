@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 
 import { api } from '../api';
+import { PartUsageModal } from '../components/PartUsageModal';
+import { formatCurrency } from '../spareParts';
 import { colors, radius, shadow, spacing, typography } from '../theme';
 import type {
   Machine,
@@ -695,6 +697,7 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
   const [historyPlan, setHistoryPlan] = useState<PreventivePlan | null>(null);
   const [historyCompletions, setHistoryCompletions] = useState<PreventiveCompletion[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [partsPlan, setPartsPlan] = useState<PreventivePlan | null>(null);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -799,6 +802,12 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
             {plan.intervalHours ? ` · ${plan.intervalHours} saatlik aralık` : ''}
           </Text>
         ) : null}
+        {plan.sparePartCount > 0 ? (
+          <View style={styles.partsSummary}>
+            <Text style={styles.partsSummaryLabel}>{plan.sparePartCount} parça kalemi</Text>
+            <Text style={styles.partsSummaryCost}>{formatCurrency(plan.sparePartCost)}</Text>
+          </View>
+        ) : null}
         <View style={styles.planFooter}>
           <Text style={styles.planFooterText}>{plan.checklistItems.length} kontrol maddesi</Text>
           <Text style={styles.planFooterText}>
@@ -806,6 +815,16 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
           </Text>
         </View>
         <View style={styles.planActions}>
+          {canComplete ? (
+            <Button
+              title="Parçaları yönet"
+              onPress={() => setPartsPlan(plan)}
+              variant="secondary"
+              compact
+              style={styles.planAction}
+              testID={`preventive-plan-parts-${plan.code}`}
+            />
+          ) : null}
           {canComplete ? (
             <Button
               title="Kontrol listesini uygula"
@@ -905,6 +924,21 @@ export function PreventiveScreen({ user }: PreventiveScreenProps) {
         loading={historyLoading}
         onClose={() => setHistoryPlan(null)}
       />
+      <PartUsageModal
+        visible={Boolean(partsPlan)}
+        ownerType="preventivePlan"
+        ownerId={partsPlan?.id ?? null}
+        ownerCode={partsPlan?.code ?? ''}
+        userId={user.id}
+        onClose={() => setPartsPlan(null)}
+        onChanged={async () => {
+          await load(true);
+          setPartsPlan((current) => {
+            if (!current) return null;
+            return plans.find((candidate) => candidate.id === current.id) ?? current;
+          });
+        }}
+      />
     </View>
   );
 }
@@ -935,6 +969,9 @@ const styles = StyleSheet.create({
   planMetaLabel: { ...typography.caption, color: colors.inkMuted },
   planMetaValue: { ...typography.label, color: colors.ink },
   runtimeText: { ...typography.caption, color: colors.primaryDark, backgroundColor: colors.primarySoft, borderRadius: radius.sm, padding: spacing.sm },
+  partsSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, backgroundColor: colors.primarySoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  partsSummaryLabel: { ...typography.caption, color: colors.primaryDark, fontWeight: '800' },
+  partsSummaryCost: { ...typography.label, color: colors.primaryDark },
   runtimeThresholdText: { ...typography.caption, color: colors.inkMuted, textAlign: 'center' },
   planFooter: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   planFooterText: { ...typography.caption, color: colors.inkMuted },
